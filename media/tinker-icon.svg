@@ -1,0 +1,28 @@
+<svg width="24" height="24" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <!-- Colorful T icon for VS Code activity bar -->
+    <!-- No background, keeps brand colors -->
+
+    <!-- Definitions -->
+    <defs>
+        <!-- Vertical beam gradient (blue top to copper bottom) -->
+        <linearGradient id="beamGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="100%" stop-color="#d97706" />
+        </linearGradient>
+    </defs>
+
+    <!-- Main T Shape -->
+    <g>
+        <!-- Top crossbar (bold T bar) - Spark Blue -->
+        <rect x="24" y="28" width="80" height="10" rx="3" fill="#3b82f6" />
+
+        <!-- Vertical beam (cursor stem) - Gradient -->
+        <rect x="56" y="28" width="16" height="68" rx="2" fill="url(#beamGradient)" />
+
+        <!-- Bottom serif (subtle base) - Electric Copper -->
+        <rect x="44" y="96" width="40" height="6" rx="2" fill="#d97706" />
+    </g>
+
+    <!-- Subtle highlight on top edge for 3D pop -->
+    <rect x="24" y="28" width="80" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+</svg>

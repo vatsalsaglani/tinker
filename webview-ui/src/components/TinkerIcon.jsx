@@ -1,0 +1,164 @@
+import React from "react";
+
+function TinkerIcon({ size = 20, className = "", isLoading = false }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 128 128"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      {/* Add blinking animation style */}
+      <style>
+        {`
+          @keyframes cursorBlink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+          }
+          .cursor-blink {
+            animation: cursorBlink 1s ease-in-out infinite;
+          }
+        `}
+      </style>
+
+      {/* Background */}
+      <rect width="128" height="128" rx="20" fill="#1e293b" />
+
+      {/* Definitions */}
+      <defs>
+        {/* Vertical beam gradient (blue top to copper bottom) */}
+        <linearGradient id="beamGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="100%" stopColor="#d97706" />
+        </linearGradient>
+
+        {/* Shadow gradient for 3D depth */}
+        <linearGradient id="shadowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#2563eb" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#b45309" stopOpacity="0.3" />
+        </linearGradient>
+
+        {/* Radial gradient for depth glow behind T */}
+        <radialGradient id="depthGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.15" />
+          <stop offset="70%" stopColor="#1e293b" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* Depth glow behind T */}
+      <ellipse cx="64" cy="68" rx="50" ry="45" fill="url(#depthGlow)" />
+
+      {/* 3D Perspective lines converging behind T */}
+      <g opacity="0.08">
+        {/* Horizontal perspective lines */}
+        <line
+          x1="10"
+          y1="33"
+          x2="118"
+          y2="33"
+          stroke="#60a5fa"
+          strokeWidth="0.75"
+        />
+        <line
+          x1="10"
+          y1="64"
+          x2="118"
+          y2="64"
+          stroke="#60a5fa"
+          strokeWidth="0.75"
+        />
+        <line
+          x1="10"
+          y1="95"
+          x2="118"
+          y2="95"
+          stroke="#d97706"
+          strokeWidth="0.75"
+        />
+
+        {/* Vertical perspective lines */}
+        <line
+          x1="32"
+          y1="14"
+          x2="32"
+          y2="114"
+          stroke="#60a5fa"
+          strokeWidth="0.75"
+        />
+        <line
+          x1="64"
+          y1="14"
+          x2="64"
+          y2="114"
+          stroke="#60a5fa"
+          strokeWidth="0.75"
+        />
+        <line
+          x1="96"
+          y1="14"
+          x2="96"
+          y2="114"
+          stroke="#60a5fa"
+          strokeWidth="0.75"
+        />
+      </g>
+
+      {/* 3D Shadow layer (offset behind main T) */}
+      <g opacity="0.25">
+        <rect x="27" y="31" width="80" height="10" rx="3" fill="#1e40af" />
+        <rect
+          x="59"
+          y="31"
+          width="16"
+          height="68"
+          rx="2"
+          fill="url(#shadowGradient)"
+        />
+        <rect x="47" y="99" width="40" height="6" rx="2" fill="#92400e" />
+      </g>
+
+      {/* Main T Shape */}
+      <g>
+        {/* Top crossbar (bold T bar) - Spark Blue */}
+        <rect x="24" y="28" width="80" height="10" rx="3" fill="#3b82f6" />
+
+        {/* Vertical beam (cursor stem) - Gradient - Blinks when loading */}
+        <rect
+          x="56"
+          y="28"
+          width="16"
+          height="68"
+          rx="2"
+          fill="url(#beamGradient)"
+          className={isLoading ? "cursor-blink" : ""}
+        />
+
+        {/* Bottom serif (subtle base) - Electric Copper */}
+        <rect x="44" y="96" width="40" height="6" rx="2" fill="#d97706" />
+      </g>
+
+      {/* Subtle highlight on top edge for 3D pop */}
+      <rect
+        x="24"
+        y="28"
+        width="80"
+        height="2"
+        rx="1"
+        fill="#60a5fa"
+        opacity="0.5"
+      />
+      <rect
+        x="56"
+        y="28"
+        width="16"
+        height="2"
+        rx="1"
+        fill="#60a5fa"
+        opacity="0.3"
+      />
+    </svg>
+  );
+}
+
+export default TinkerIcon;

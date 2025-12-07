@@ -1,0 +1,213 @@
+{
+  "name": "tinker",
+  "displayName": "Tinker",
+  "description": "Open-source Coding Agent - BYOK",
+  "version": "0.0.1",
+  "author": "vatsalsaglani",
+  "publisher": "vatsalsaglani",
+  "icon": "media/tinker-logo-v2.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vatsalsaglani/tinker"
+  },
+  "bugs": {
+    "url": "https://github.com/vatsalsaglani/tinker/issues"
+  },
+  "homepage": "https://github.com/vatsalsaglani/tinker#readme",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./src/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tinker-sidebar-view",
+          "title": "Tinker",
+          "icon": "media/tinker-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "tinker-sidebar-view": [
+        {
+          "type": "webview",
+          "id": "tinker-sidebar",
+          "name": "Tinker Agent",
+          "icon": "media/tinker-icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tinker.addSelection",
+        "title": "Tinker: Add Selection to Context",
+        "category": "Tinker"
+      },
+      {
+        "command": "tinker.openSettings",
+        "title": "Tinker: Open Settings",
+        "category": "Tinker"
+      },
+      {
+        "command": "tinker.clearChat",
+        "title": "Tinker: Clear Chat History",
+        "category": "Tinker"
+      },
+      {
+        "command": "tinker.acceptChange",
+        "title": "Accept Change",
+        "category": "Tinker",
+        "icon": "$(check)"
+      },
+      {
+        "command": "tinker.rejectChange",
+        "title": "Reject Change",
+        "category": "Tinker",
+        "icon": "$(close)"
+      },
+      {
+        "command": "tinker.acceptAllChanges",
+        "title": "Accept All Changes",
+        "category": "Tinker",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "tinker.openConfigPanel",
+        "title": "Tinker: Configure API Keys & Models",
+        "category": "Tinker"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "tinker.acceptChange",
+          "when": "activeEditor && resourceScheme == tinker-diff",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tinker.rejectChange",
+          "when": "activeEditor && resourceScheme == tinker-diff",
+          "group": "navigation@2"
+        },
+        {
+          "command": "tinker.acceptAllChanges",
+          "when": "activeEditor && resourceScheme == tinker-diff",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "tinker.addSelection",
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Tinker Assistant",
+      "properties": {
+        "tinkerAssistant.provider": {
+          "type": "string",
+          "default": "openai",
+          "enum": [
+            "openai",
+            "anthropic",
+            "gemini",
+            "azure"
+          ],
+          "description": "LLM provider to use"
+        },
+        "tinkerAssistant.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model to use (leave empty for provider default)"
+        },
+        "tinkerAssistant.useResponsesAPI": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use OpenAI Responses API instead of Chat Completions (for models like gpt-5.1-codex-mini)"
+        },
+        "tinkerAssistant.azureEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Azure OpenAI endpoint URL"
+        },
+        "tinkerAssistant.customModels": {
+          "type": "object",
+          "default": {
+            "openai": [
+              "gpt-4o",
+              "gpt-4",
+              "o1"
+            ],
+            "anthropic": [
+              "claude-sonnet-4-20250514",
+              "claude-3-5-sonnet-20241022"
+            ],
+            "gemini": [
+              "gemini-2.0-flash-exp",
+              "gemini-1.5-pro"
+            ],
+            "azure": [
+              "gpt-4",
+              "gpt-35-turbo"
+            ]
+          },
+          "description": "Custom models per provider"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch:extension": "webpack --watch",
+    "watch:webview": "webpack --config webpack.webview.config.js --watch",
+    "build:css": "npx @tailwindcss/cli -i ./webview-ui/src/styles/input.css -o ./webview-ui/dist/output.css --minify",
+    "watch:css": "npx @tailwindcss/cli -i ./webview-ui/src/styles/input.css -o ./webview-ui/dist/output.css --watch",
+    "dev": "concurrently \"npm run watch:css\" \"npm run watch:webview\" \"npm run watch:extension\"",
+    "package": "npm run build:css && webpack --mode production && webpack --config webpack.webview.config.js --mode production",
+    "vsix": "npm run package && npx @vscode/vsce package",
+    "test": "node ./test/runTest.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
+    "@tailwindcss/cli": "^4.1.17",
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/marked": "^6.0.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.1",
+    "@types/vscode": "^1.106.1",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "babel-loader": "^10.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.1",
+    "tailwindcss": "^4.1.17",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "@google/generative-ai": "^0.24.1",
+    "@tailwindcss/typography": "^0.5.19",
+    "clsx": "^2.1.1",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^0.555.0",
+    "marked": "^17.0.1",
+    "openai": "^6.3.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.1.13"
+  }
+}

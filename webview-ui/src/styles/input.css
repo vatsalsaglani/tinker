@@ -1,0 +1,396 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Tinker Color Palette */
+@theme {
+  /* Primary: Electric Copper (Tinkering/Workshop) */
+  --color-tinker-copper: #d97706;
+  --color-tinker-copper-light: #f59e0b;
+  --color-tinker-copper-dark: #b45309;
+
+  /* Secondary: Spark Blue (Innovation/Electricity) */
+  --color-tinker-spark: #3b82f6;
+  --color-tinker-spark-light: #60a5fa;
+  --color-tinker-spark-dark: #2563eb;
+
+  /* Accent: Forge Orange (Creation/Energy) */
+  --color-tinker-forge: #ea580c;
+  --color-tinker-forge-light: #fb923c;
+  --color-tinker-forge-dark: #c2410c;
+
+  /* Neutral: Steel Gray (Tools/Precision) */
+  --color-tinker-steel: #64748b;
+  --color-tinker-steel-light: #94a3b8;
+  --color-tinker-steel-dark: #475569;
+
+  /* Special effects */
+  --shadow-copper-glow: 0 0 20px rgb(217 119 6 / 0.3);
+  --shadow-copper-glow-sm: 0 0 10px rgb(217 119 6 / 0.2);
+  --shadow-spark-glow: 0 0 20px rgb(59 130 246 / 0.3);
+  --shadow-spark-glow-sm: 0 0 10px rgb(59 130 246 / 0.2);
+
+  /* Custom Animation - Tailwind v4 syntax */
+  --animate-pulse-slow: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Define keyframes */
+@keyframes pulse-slow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Loading bar animations for thinking indicator */
+@keyframes loading-bar-1 {
+  0%,
+  100% {
+    width: 40%;
+    opacity: 0.6;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+}
+
+@keyframes loading-bar-2 {
+  0%,
+  100% {
+    width: 25%;
+    opacity: 0.4;
+  }
+  50% {
+    width: 50%;
+    opacity: 0.8;
+  }
+}
+
+@keyframes loading-bar-3 {
+  0%,
+  100% {
+    width: 20%;
+    opacity: 0.3;
+  }
+  50% {
+    width: 35%;
+    opacity: 0.6;
+  }
+}
+
+/* Send button loader animation */
+@keyframes spin-bounce {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.9);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+}
+
+.animate-loading-bar-1 {
+  animation: loading-bar-1 1.5s ease-in-out infinite;
+}
+
+.animate-loading-bar-2 {
+  animation: loading-bar-2 1.5s ease-in-out infinite 0.2s;
+}
+
+.animate-loading-bar-3 {
+  animation: loading-bar-3 1.5s ease-in-out infinite 0.4s;
+}
+
+.animate-spin-bounce {
+  animation: spin-bounce 1s ease-in-out infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s ease-in-out infinite;
+}
+
+/* ============================
+   Theme-Aware Component Styles
+   ============================ */
+
+/* Panel backgrounds that adapt to VS Code theme */
+.tinker-panel-bg {
+  background-color: var(--vscode-sideBar-background, #1e1e2e);
+}
+
+.tinker-panel-secondary {
+  background-color: var(--vscode-editor-background, #1a1f2e);
+}
+
+.tinker-input-bg {
+  background-color: var(--vscode-input-background, #2d2d3a);
+  color: var(--vscode-input-foreground, #fff);
+}
+
+.tinker-input-bg::placeholder {
+  color: var(--vscode-input-placeholderForeground, rgba(255, 255, 255, 0.5));
+}
+
+/* Text colors */
+.tinker-text {
+  color: var(--vscode-foreground, #fff);
+}
+
+.tinker-text-muted {
+  color: var(--vscode-descriptionForeground, rgba(255, 255, 255, 0.6));
+}
+
+/* Borders */
+.tinker-border {
+  border-color: var(--vscode-panel-border, rgba(255, 255, 255, 0.1));
+}
+
+/* Message bubble backgrounds */
+.tinker-user-bubble {
+  background-color: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+
+.tinker-assistant-bubble {
+  background-color: var(--vscode-editor-background, #1e1e2e);
+  color: var(--vscode-foreground, #fff);
+}
+
+/* Code block that adapts to theme */
+.tinker-code-bg {
+  background-color: var(--vscode-textCodeBlock-background, #1e1e2e);
+  color: var(--vscode-foreground, #abb2bf);
+}
+
+/* Component Classes */
+@layer components {
+  /* Primary Action Button (Copper) */
+  .tinker-button-primary {
+    @apply px-4 py-2 font-semibold rounded-md transition-all
+           bg-tinker-copper text-white
+           hover:bg-tinker-copper-light
+           shadow-lg shadow-tinker-copper/20
+           hover:shadow-copper-glow-sm;
+  }
+
+  /* Secondary Button (Spark Blue) */
+  .tinker-button-secondary {
+    @apply px-4 py-2 font-semibold rounded-md transition-all
+           bg-tinker-spark text-white
+           hover:bg-tinker-spark-light
+           shadow-lg shadow-tinker-spark/20
+           hover:shadow-spark-glow-sm;
+  }
+
+  /* Accent Button (Forge Orange) */
+  .tinker-button-accent {
+    @apply px-4 py-2 font-semibold rounded-md transition-all
+           bg-tinker-forge text-white
+           hover:bg-tinker-forge-light
+           shadow-lg shadow-tinker-forge/20;
+  }
+
+  /* Theme-aware Ghost Button */
+  .tinker-button-ghost {
+    @apply px-4 py-2 font-semibold rounded-md transition-colors
+           bg-[var(--vscode-button-secondaryBackground)] 
+           text-[var(--vscode-button-secondaryForeground)]
+           hover:bg-[var(--vscode-button-secondaryHoverBackground)];
+  }
+
+  /* Input Field */
+  .tinker-input {
+    @apply w-full px-3 py-2 rounded transition-colors
+           bg-[var(--vscode-input-background)] 
+           text-[var(--vscode-input-foreground)]
+           border border-[var(--vscode-input-border)]
+           focus:outline-none focus:border-tinker-copper;
+  }
+
+  /* Card Container */
+  .tinker-card {
+    @apply p-4 rounded-lg transition-all
+           bg-[var(--vscode-editor-background)]
+           border border-[var(--vscode-panel-border)]
+           hover:border-tinker-copper/50
+           hover:shadow-copper-glow-sm;
+  }
+
+  /* Status Badge Base */
+  .tinker-badge {
+    @apply inline-flex items-center px-3 py-1 text-xs font-bold rounded-full
+           ring-1;
+  }
+
+  /* AI/Agentic Badge - Now uses custom animation */
+  .tinker-ai-badge {
+    @apply inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded
+           bg-gradient-to-r from-tinker-spark/20 to-tinker-copper/20
+           text-tinker-copper border border-tinker-copper/30;
+    animation: var(--animate-pulse-slow);
+  }
+
+  /* Code Block */
+  .tinker-code {
+    @apply p-3 rounded font-mono text-sm
+           bg-[var(--vscode-textCodeBlock-background)]
+           border border-[var(--vscode-panel-border)];
+  }
+}
+
+/* ============================
+   Tailwind Typography Customization
+   ============================ */
+
+/* Override max-width for prose */
+.max-w-none {
+  max-width: none;
+}
+
+/* Customize prose colors for VS Code theme */
+.prose {
+  --tw-prose-body: var(--vscode-foreground);
+  --tw-prose-headings: var(--vscode-foreground);
+  --tw-prose-links: var(--color-tinker-spark, #3b82f6);
+  --tw-prose-bold: var(--vscode-foreground);
+  --tw-prose-code: #e5c07b;
+  --tw-prose-pre-bg: var(--vscode-textCodeBlock-background);
+  --tw-prose-quotes: var(--vscode-foreground);
+  --tw-prose-quote-borders: var(--color-tinker-copper, #d97706);
+}
+
+.prose-invert {
+  --tw-prose-body: var(--vscode-foreground);
+  --tw-prose-headings: var(--vscode-foreground);
+  --tw-prose-links: var(--color-tinker-spark-light, #60a5fa);
+  --tw-prose-bold: var(--vscode-foreground);
+  --tw-prose-code: #e5c07b;
+  --tw-prose-pre-bg: var(--vscode-textCodeBlock-background);
+}
+
+/* ============================
+   Code Block Styling
+   ============================ */
+
+.prose pre {
+  background-color: #1e1e2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  background: none;
+  padding: 0;
+  font-family: "Fira Code", "Consolas", "Monaco", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #abb2bf;
+}
+
+.prose code:not(pre code) {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: "Fira Code", "Consolas", monospace;
+  font-size: 0.85em;
+  color: #e5c07b;
+}
+
+/* ============================
+   Highlight.js Syntax Highlighting (One Dark Theme)
+   ============================ */
+
+.hljs {
+  background: #1e1e2e;
+  color: #abb2bf;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: #c678dd;
+}
+
+.hljs-function .hljs-keyword {
+  color: #c678dd;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+  color: #98c379;
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-class .hljs-title {
+  color: #61afef;
+}
+
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: #e06c75;
+}
+
+.hljs-type,
+.hljs-built_in,
+.hljs-name {
+  color: #e5c07b;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+
+.hljs-number,
+.hljs-regexp,
+.hljs-deletion {
+  color: #d19a66;
+}
+
+.hljs-meta,
+.hljs-meta .hljs-string {
+  color: #56b6c2;
+}
+
+.hljs-subst {
+  color: #abb2bf;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
