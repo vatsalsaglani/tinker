@@ -38,7 +38,8 @@ export function useChat() {
       return {
         role: msg.role,
         content,
-        codeBlocks: msg.metadata?.codeBlocks || [],
+        codeBlocks: msg.codeBlocks || [],
+        contextChips: msg.contextChips || null, // Include context chips for display
         toolCalls: [],
       };
     });

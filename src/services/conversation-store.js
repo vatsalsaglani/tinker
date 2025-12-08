@@ -238,6 +238,7 @@ class ConversationStore {
       model: message.model || null,
       hasToolCalls,
       codeBlocks: message.codeBlocks || null,
+      contextChips: message.contextChips || null,
       createdAt: now,
     };
 

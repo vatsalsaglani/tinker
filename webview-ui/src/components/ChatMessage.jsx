@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import CodeBlock from "./CodeBlock";
 import ToolCall from "./ToolCall";
-import { User, Copy, Check } from "lucide-react";
+import { User, Copy, Check, FileText, Zap, Scissors } from "lucide-react";
 import TinkerIcon from "./TinkerIcon";
 
 function ChatMessage({ message, appliedBlocks = new Set() }) {
@@ -290,6 +290,47 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
     }
 
     if (message.role === "user") {
+      // Context chips to display as badges
+      const contextChips = message.contextChips || [];
+
+      // Render context chip badges
+      const renderChips = () => {
+        if (contextChips.length === 0) return null;
+        return (
+          <div className="flex gap-1 flex-wrap mt-2">
+            {contextChips.map((chip, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs"
+                style={{
+                  backgroundColor: "var(--vscode-button-secondaryBackground)",
+                  color: "var(--vscode-button-secondaryForeground)",
+                }}
+              >
+                {chip.type === "file" && (
+                  <>
+                    <FileText size={12} style={{ opacity: 0.7 }} />
+                    {chip.display || chip.path}
+                  </>
+                )}
+                {chip.type === "symbol" && (
+                  <>
+                    <Zap size={12} style={{ opacity: 0.7 }} />
+                    {chip.display}
+                  </>
+                )}
+                {chip.type === "selection" && (
+                  <>
+                    <Scissors size={12} style={{ opacity: 0.7 }} />
+                    {chip.display}
+                  </>
+                )}
+              </span>
+            ))}
+          </div>
+        );
+      };
+
       // Handle multi-modal content (array with text and images)
       if (Array.isArray(message.content)) {
         const textParts = message.content.filter(
@@ -326,12 +367,18 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
                 })}
               </div>
             )}
+            {renderChips()}
           </div>
         );
       }
 
       // Simple string content
-      return <div className="whitespace-pre-wrap">{message.content}</div>;
+      return (
+        <div>
+          <div className="whitespace-pre-wrap">{message.content}</div>
+          {renderChips()}
+        </div>
+      );
     }
 
     // Render tool calls first (if any), then content

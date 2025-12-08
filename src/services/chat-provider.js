@@ -453,16 +453,22 @@ class ChatViewProvider {
     // Create abort controller
     this.abortController = new AbortController();
 
-    // Build context from chips
+    // Build context from chips (for LLM)
     let contextText = "";
+    // Build chip metadata for storage (just paths/references, not full content)
+    const chipMetadata = [];
 
     for (const chip of contextChips) {
       try {
         if (chip.type === "file") {
           const doc = await vscode.workspace.openTextDocument(chip.value);
-          contextText += `\n\nFile: ${vscode.workspace.asRelativePath(
-            doc.uri
-          )}\n\`\`\`\n${doc.getText()}\n\`\`\``;
+          const relativePath = vscode.workspace.asRelativePath(doc.uri);
+          contextText += `\n\nFile: ${relativePath}\n\`\`\`\n${doc.getText()}\n\`\`\``;
+          chipMetadata.push({
+            type: "file",
+            path: relativePath,
+            display: chip.display || relativePath,
+          });
         } else if (chip.type === "symbol") {
           const [path, line] = chip.value.split(":");
           const doc = await vscode.workspace.openTextDocument(path);
@@ -471,9 +477,17 @@ class ChatViewProvider {
           const end = Math.min(doc.lineCount - 1, lineNum + 20);
           const range = new vscode.Range(start, 0, end, 1000);
           const content = doc.getText(range);
+          const relativePath = vscode.workspace.asRelativePath(doc.uri);
           contextText += `\n\nSymbol: ${chip.display}\n\`\`\`\n${content}\n\`\`\``;
+          chipMetadata.push({
+            type: "symbol",
+            path: relativePath,
+            line: lineNum,
+            display: chip.display,
+          });
         } else if (chip.type === "selection") {
           contextText += `\n\nSelection from ${chip.display}:\n\`\`\`\n${chip.value}\n\`\`\``;
+          chipMetadata.push({ type: "selection", display: chip.display });
         }
       } catch (e) {
         this.log("Error reading context chip:", e);
@@ -482,7 +496,7 @@ class ChatViewProvider {
 
     const fullMessage = text + contextText;
 
-    // Format user message - with images if any
+    // Format user message - with images if any (for LLM with full context)
     let userMessage;
     if (images && images.length > 0) {
       // Multi-modal message with images
@@ -505,14 +519,31 @@ class ChatViewProvider {
 
     this.conversationHistory.push(userMessage);
 
-    // Persist user message to storage
+    // Persist user message to storage - store ONLY original text + chip metadata (not full file content)
     if (this.storage && this.currentConversationId) {
       try {
         const workspaceId = this.getWorkspaceId();
+
+        // Build display content for storage (text only, no file contents)
+        let displayContent;
+        if (images && images.length > 0) {
+          displayContent = [
+            { type: "text", text: text }, // Original text only
+            ...images.slice(0, 4).map((img) => ({
+              type: "image_url",
+              image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+            })),
+          ];
+        } else {
+          displayContent = text; // Original text only
+        }
+
         await this.storage.addMessage(workspaceId, this.currentConversationId, {
-          ...userMessage,
-          provider: this.llmConnector.activeProvider || null,
+          role: "user",
+          content: displayContent,
+          provider: this.llmConnector.getCurrentProvider()?.name || null,
           model: this.llmConnector.getCurrentProvider()?.model || null,
+          contextChips: chipMetadata.length > 0 ? chipMetadata : null,
         });
       } catch (err) {
         this.log("Error persisting user message:", err);

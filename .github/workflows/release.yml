@@ -2,9 +2,14 @@ name: Build and Release VSIX
 
 on:
   push:
-    tags:
-      - 'v*'  # Triggers on version tags like v0.0.1, v1.0.0, etc.
+    branches:
+      - 'v*'  # Triggers when pushing/merging to version branches like v0.0.1, v1.0.0, etc.
   workflow_dispatch:  # Allows manual triggering
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.0.2)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -16,6 +21,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Extract version from branch name
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+            # Manual trigger with version input
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from branch name (remove 'v' prefix)
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            VERSION="${BRANCH_NAME#v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Update package.json version
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+          echo "Updated package.json to version ${{ steps.version.outputs.version }}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,8 +74,8 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
           name: Tinker v${{ steps.package.outputs.version }}
           body: |
             ## Tinker v${{ steps.package.outputs.version }}
@@ -69,9 +94,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload VSIX artifact (for manual runs)
+      - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tinker-vsix
+          name: tinker-vsix-${{ steps.package.outputs.version }}
           path: "*.vsix"
           retention-days: 30
