@@ -5,6 +5,7 @@ import ChatMessage from "./components/ChatMessage";
 import ContextChip from "./components/ContextChip";
 import Autocomplete from "./components/Autocomplete";
 import SettingsPanel from "./components/SettingsPanel";
+import ConversationPopup from "./components/ConversationPopup";
 import ThinkingIndicator from "./components/ThinkingIndicator";
 import ChipInput from "./components/ChipInput";
 import ImageAttachments from "./components/ImageAttachments";
@@ -19,12 +20,14 @@ import {
   ImagePlus,
   Loader2,
   Square,
+  MessageSquare,
 } from "lucide-react";
 import { OpenAIIcon, ClaudeIcon, GeminiIcon, AzureIcon } from "./icons";
 import Switch from "./components/Switch";
 
 function Sidebar() {
   const [showSettings, setShowSettings] = useState(false);
+  const [showConversations, setShowConversations] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState("openai");
   const [selectedModel, setSelectedModel] = useState("");
   const [useResponsesAPI, setUseResponsesAPI] = useState(false);
@@ -326,16 +329,31 @@ function Sidebar() {
       {/* Settings Panel */}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
+      {/* Conversation Popup */}
+      <ConversationPopup
+        isOpen={showConversations}
+        onClose={() => setShowConversations(false)}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-[var(--vscode-panel-border)]">
         <h3 className="font-semibold">Tinker Agent</h3>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="p-1 hover:opacity-70 transition-opacity"
-          title="Settings"
-        >
-          <Settings size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowConversations(!showConversations)}
+            className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
+            title="Conversations"
+          >
+            <MessageSquare size={16} />
+          </button>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
+            title="Settings"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

@@ -13,6 +13,37 @@ export function useChat() {
   // Use ref to track tool calls that belong to current assistant turn
   const currentToolCallsRef = useRef([]);
 
+  /**
+   * Format persisted messages for UI display
+   * Converts array content back to simpler format if needed
+   */
+  const formatMessages = (msgs) => {
+    if (!msgs || !Array.isArray(msgs)) return [];
+    return msgs.map((msg) => {
+      let content = msg.content;
+
+      // If content is an array, extract text for display
+      if (Array.isArray(content)) {
+        const textParts = content
+          .filter((p) => p.type === "text")
+          .map((p) => p.text);
+        const hasImages = content.some((p) => p.type === "image_url");
+
+        // Keep as array if has images, otherwise flatten to string
+        if (!hasImages && textParts.length === 1) {
+          content = textParts[0];
+        }
+      }
+
+      return {
+        role: msg.role,
+        content,
+        codeBlocks: msg.metadata?.codeBlocks || [],
+        toolCalls: [],
+      };
+    });
+  };
+
   const vscode = useVSCodeMessage((message) => {
     switch (message.type) {
       case "userMessage":
@@ -124,6 +155,23 @@ export function useChat() {
       case "generationStopped":
         setIsGenerating(false);
         setIsThinking(false);
+        setCurrentAssistantMessage(null);
+        currentToolCallsRef.current = [];
+        break;
+
+      case "messagesLoaded":
+        // Load messages from persisted storage
+        if (message.isAppend) {
+          // Prepend older messages
+          setMessages((prev) => [...formatMessages(message.messages), ...prev]);
+        } else {
+          // Replace all messages (conversation switch)
+          setMessages(formatMessages(message.messages));
+        }
+        break;
+
+      case "clearChat":
+        setMessages([]);
         setCurrentAssistantMessage(null);
         currentToolCallsRef.current = [];
         break;

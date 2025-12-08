@@ -181,7 +181,26 @@ class OpenAIProvider extends BaseProvider {
           "[OpenAI] Responses API Data:",
           JSON.stringify(data, null, 2)
         );
-        return data.output || data.choices?.[0]?.message?.content || "";
+
+        // Extract text from Responses API output array
+        // Output can contain: { type: "message", content: [...] } or { type: "output_text", text: "..." }
+        if (data.output && Array.isArray(data.output)) {
+          for (const item of data.output) {
+            if (item.type === "message" && item.content) {
+              // Extract text from message content array
+              const textParts = item.content
+                .filter((c) => c.type === "output_text" || c.type === "text")
+                .map((c) => c.text)
+                .join("");
+              if (textParts) return textParts;
+            } else if (item.type === "output_text" && item.text) {
+              return item.text;
+            }
+          }
+        }
+
+        // Fallback to Chat Completions format
+        return data.choices?.[0]?.message?.content || "";
       } catch (error) {
         console.error("[OpenAI] Responses API ERROR:", error);
         throw new Error(`OpenAI Error: ${error.message}`);

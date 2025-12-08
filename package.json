@@ -190,6 +190,7 @@
     "@vscode/test-electron": "^2.5.2",
     "babel-loader": "^10.0.0",
     "concurrently": "^9.2.1",
+    "electron": "^32.0.0",
     "eslint": "^9.39.1",
     "tailwindcss": "^4.1.17",
     "webpack-cli": "^6.0.1"
@@ -208,6 +209,7 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "uuid": "^13.0.0",
     "zod": "^4.1.13"
   }
 }

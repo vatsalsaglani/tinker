@@ -1,6 +1,8 @@
 const vscode = require("vscode");
 const LLMConnector = require("./llm-connector");
 const DiffApplier = require("./diff-applier");
+const ConversationStore = require("./conversation-store");
+const TitleGenerator = require("./title-generator");
 const { WorkspaceTools } = require("../tools/workspace-tools");
 
 class ChatViewProvider {
@@ -14,10 +16,17 @@ class ChatViewProvider {
     this.conversationHistory = [];
     this.abortController = null;
     this.outputChannel = vscode.window.createOutputChannel("Tinker Assistant");
+
+    // Conversation persistence (initialized in setContext)
+    this.storage = null;
+    this.titleGenerator = new TitleGenerator(this.llmConnector);
+    this.currentConversationId = null;
   }
 
   setContext(context) {
     this._context = context;
+    // Initialize storage with context (for globalState access)
+    this.storage = new ConversationStore(context);
   }
 
   log(message, ...args) {
@@ -126,6 +135,26 @@ class ChatViewProvider {
           break;
         case "openConfigPanel":
           this.openConfigPanel();
+          break;
+
+        // Conversation management
+        case "loadConversations":
+          await this.handleLoadConversations();
+          break;
+        case "switchConversation":
+          await this.handleSwitchConversation(data.conversationId);
+          break;
+        case "createConversation":
+          await this.handleCreateConversation();
+          break;
+        case "deleteConversation":
+          await this.handleDeleteConversation(data.conversationId);
+          break;
+        case "togglePinConversation":
+          await this.handleTogglePin(data.conversationId);
+          break;
+        case "loadMoreMessages":
+          await this.handleLoadMoreMessages(data.beforeId);
           break;
       }
     });
@@ -414,6 +443,13 @@ class ChatViewProvider {
   async handleUserMessage(text, contextChips, images = []) {
     if (!this._view) return;
 
+    // Ensure we have a current conversation
+    if (!this.currentConversationId && this.storage) {
+      const workspaceId = this.getWorkspaceId();
+      const conversation = await this.storage.getOrCreateDefault(workspaceId);
+      this.currentConversationId = conversation.id;
+    }
+
     // Create abort controller
     this.abortController = new AbortController();
 
@@ -468,6 +504,20 @@ class ChatViewProvider {
     }
 
     this.conversationHistory.push(userMessage);
+
+    // Persist user message to storage
+    if (this.storage && this.currentConversationId) {
+      try {
+        const workspaceId = this.getWorkspaceId();
+        await this.storage.addMessage(workspaceId, this.currentConversationId, {
+          ...userMessage,
+          provider: this.llmConnector.activeProvider || null,
+          model: this.llmConnector.getCurrentProvider()?.model || null,
+        });
+      } catch (err) {
+        this.log("Error persisting user message:", err);
+      }
+    }
 
     // Send to webview - only show original text + images (not the augmented context)
     // The LLM gets the full context, but the UI should just show what the user typed
@@ -727,6 +777,30 @@ class ChatViewProvider {
           role: "assistant",
           content: fullResponse,
         });
+      }
+
+      // Persist assistant message to storage and trigger title generation
+      if (this.storage && this.currentConversationId) {
+        try {
+          const workspaceId = this.getWorkspaceId();
+          await this.storage.addMessage(
+            workspaceId,
+            this.currentConversationId,
+            {
+              role: "assistant",
+              content: fullResponse,
+              provider: this.llmConnector.getCurrentProvider()?.name || null,
+              model: this.llmConnector.getCurrentProvider()?.model || null,
+              toolCalls: turnToolCalls.length > 0 ? turnToolCalls : null,
+              codeBlocks: blocks && blocks.length > 0 ? blocks : null,
+            }
+          );
+
+          // Trigger title generation (async, don't await)
+          this.maybeGenerateTitle(this.currentConversationId);
+        } catch (err) {
+          this.log("Error persisting assistant message:", err);
+        }
       }
     } catch (error) {
       this.log("[Error]", error);
@@ -1248,6 +1322,314 @@ class ChatViewProvider {
       type: "providerKeysLoaded",
       keyStatus,
     });
+  }
+
+  // ==================== CONVERSATION MANAGEMENT ====================
+
+  /**
+   * Get current workspace identifier
+   */
+  getWorkspaceId() {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      return workspaceFolders[0].uri.fsPath;
+    }
+    return "default";
+  }
+
+  /**
+   * Handle loading conversations list
+   */
+  async handleLoadConversations() {
+    if (!this._view || !this.storage) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      const { conversations } = await this.storage.getConversations(
+        workspaceId,
+        0,
+        50
+      );
+
+      // Get or create default conversation if none exist
+      if (conversations.length === 0) {
+        const newConv = await this.storage.createConversation(workspaceId);
+        this.currentConversationId = newConv.id;
+        conversations.push(newConv);
+      } else if (!this.currentConversationId) {
+        // Set current to most recent
+        this.currentConversationId = conversations[0].id;
+      }
+
+      this._view.webview.postMessage({
+        type: "conversationsLoaded",
+        conversations,
+        currentConversationId: this.currentConversationId,
+      });
+
+      // Load messages for current conversation
+      if (this.currentConversationId) {
+        await this.loadConversationMessages(this.currentConversationId);
+      }
+    } catch (error) {
+      this.log("Error loading conversations:", error);
+    }
+  }
+
+  /**
+   * Handle switching to a different conversation
+   */
+  async handleSwitchConversation(conversationId) {
+    if (!this._view || !conversationId || !this.storage) return;
+
+    try {
+      this.currentConversationId = conversationId;
+
+      // Clear in-memory history
+      this.conversationHistory = [];
+
+      // Load messages for this conversation
+      await this.loadConversationMessages(conversationId);
+
+      // Notify frontend of switch
+      this._view.webview.postMessage({
+        type: "conversationSwitched",
+        conversationId,
+      });
+    } catch (error) {
+      this.log("Error switching conversation:", error);
+    }
+  }
+
+  /**
+   * Load messages for a conversation (with pagination)
+   */
+  async loadConversationMessages(conversationId, beforeIndex = null) {
+    if (!this._view || !this.storage) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      const result = await this.storage.getMessages(
+        workspaceId,
+        conversationId,
+        {
+          pageSize: 50,
+          beforeIndex,
+        }
+      );
+
+      if (!result) return;
+
+      const { messages, hasMoreBefore, hasMoreAfter } = result;
+
+      // Rebuild conversation history for LLM context on full load
+      if (!beforeIndex) {
+        const allMessages = await this.storage.getAllMessages(
+          workspaceId,
+          conversationId
+        );
+        this.conversationHistory = allMessages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+      }
+
+      // Get conversation details
+      const conversation = await this.storage.getById(
+        workspaceId,
+        conversationId
+      );
+
+      this._view.webview.postMessage({
+        type: "messagesLoaded",
+        messages,
+        hasMore: hasMoreBefore,
+        isAppend: !!beforeIndex,
+        conversation,
+      });
+    } catch (error) {
+      this.log("Error loading messages:", error);
+    }
+  }
+
+  /**
+   * Handle creating a new conversation
+   */
+  async handleCreateConversation() {
+    if (!this._view || !this.storage) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      const conversation = await this.storage.createConversation(workspaceId);
+
+      this.currentConversationId = conversation.id;
+      this.conversationHistory = [];
+
+      this._view.webview.postMessage({
+        type: "conversationCreated",
+        conversation,
+      });
+
+      // Clear messages in UI
+      this._view.webview.postMessage({
+        type: "messagesLoaded",
+        messages: [],
+        hasMore: false,
+        isAppend: false,
+        conversation,
+      });
+    } catch (error) {
+      this.log("Error creating conversation:", error);
+    }
+  }
+
+  /**
+   * Handle deleting a conversation
+   */
+  async handleDeleteConversation(conversationId) {
+    if (!this._view || !conversationId || !this.storage) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      await this.storage.deleteConversation(workspaceId, conversationId);
+
+      // If deleting current, switch to another
+      if (this.currentConversationId === conversationId) {
+        const { conversations } = await this.storage.getConversations(
+          workspaceId,
+          0,
+          1
+        );
+
+        if (conversations.length > 0) {
+          await this.handleSwitchConversation(conversations[0].id);
+        } else {
+          // Create new if none left
+          await this.handleCreateConversation();
+        }
+      }
+
+      // Reload conversation list
+      await this.handleLoadConversations();
+    } catch (error) {
+      this.log("Error deleting conversation:", error);
+    }
+  }
+
+  /**
+   * Handle toggling pin status
+   */
+  async handleTogglePin(conversationId) {
+    if (!this._view || !conversationId || !this.storage) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      const newPinned = await this.storage.togglePin(
+        workspaceId,
+        conversationId
+      );
+
+      this._view.webview.postMessage({
+        type: "conversationPinToggled",
+        conversationId,
+        isPinned: newPinned,
+      });
+
+      // Reload list to reorder
+      await this.handleLoadConversations();
+    } catch (error) {
+      this.log("Error toggling pin:", error);
+    }
+  }
+
+  /**
+   * Handle loading more (older) messages
+   */
+  async handleLoadMoreMessages(beforeIndex) {
+    if (!this._view || !this.currentConversationId || beforeIndex === null)
+      return;
+
+    try {
+      await this.loadConversationMessages(
+        this.currentConversationId,
+        beforeIndex
+      );
+    } catch (error) {
+      this.log("Error loading more messages:", error);
+    }
+  }
+
+  /**
+   * Trigger title generation for a conversation (called after first exchange)
+   */
+  async maybeGenerateTitle(conversationId) {
+    if (!this.storage) {
+      this.log("[TitleGen] No storage available");
+      return;
+    }
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      this.log("[TitleGen] Checking title for conversation:", conversationId);
+
+      // Only generate if still default title
+      const conversation = await this.storage.getById(
+        workspaceId,
+        conversationId
+      );
+      if (!conversation) {
+        this.log("[TitleGen] Conversation not found");
+        return;
+      }
+      if (conversation.title !== "New Chat") {
+        this.log("[TitleGen] Title already set:", conversation.title);
+        return;
+      }
+
+      // Check if we have enough messages
+      const messageCount = await this.storage.getMessageCount(
+        workspaceId,
+        conversationId
+      );
+      this.log("[TitleGen] Message count:", messageCount);
+      if (messageCount < 2) {
+        this.log("[TitleGen] Not enough messages");
+        return; // Need at least 1 user + 1 assistant message
+      }
+
+      // Check if LLM is available
+      if (!this.titleGenerator.isAvailable()) {
+        this.log("[TitleGen] LLM not available");
+        return;
+      }
+
+      // Get first few messages for context
+      const messages = await this.storage.getMessagesForTitleGeneration(
+        workspaceId,
+        conversationId,
+        3
+      );
+      this.log("[TitleGen] Got messages for title:", messages?.length);
+
+      // Generate title (async, don't block)
+      this.log("[TitleGen] Calling generateTitle...");
+      const title = await this.titleGenerator.generateTitle(messages);
+      this.log("[TitleGen] Generated title:", title);
+
+      if (title && title !== "New Chat") {
+        await this.storage.updateTitle(workspaceId, conversationId, title);
+
+        // Notify frontend
+        this._view?.webview.postMessage({
+          type: "conversationTitleUpdated",
+          conversationId,
+          title,
+        });
+        this.log("[TitleGen] Title updated successfully");
+      }
+    } catch (error) {
+      this.log("[TitleGen] Error generating title:", error);
+    }
   }
 
   /**
