@@ -6,7 +6,6 @@ import ContextChip from "./components/ContextChip";
 import Autocomplete from "./components/Autocomplete";
 import SettingsPanel from "./components/SettingsPanel";
 import ConversationPopup from "./components/ConversationPopup";
-import ThinkingIndicator from "./components/ThinkingIndicator";
 import ChipInput from "./components/ChipInput";
 import ImageAttachments from "./components/ImageAttachments";
 import Dropdown from "./components/Dropdown";
@@ -22,7 +21,13 @@ import {
   Square,
   MessageSquare,
 } from "lucide-react";
-import { OpenAIIcon, ClaudeIcon, GeminiIcon, AzureIcon } from "./icons";
+import {
+  OpenAIIcon,
+  ClaudeIcon,
+  GeminiIcon,
+  AzureIcon,
+  BedrockIcon,
+} from "./icons";
 import Switch from "./components/Switch";
 
 function Sidebar() {
@@ -40,6 +45,10 @@ function Sidebar() {
     anthropic: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"],
     gemini: ["gemini-2.0-flash-exp", "gemini-1.5-pro"],
     azure: ["gpt-4", "gpt-35-turbo"],
+    bedrock: [
+      "anthropic.claude-sonnet-4-20250514-v1:0",
+      "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    ],
   });
 
   const { messages, isGenerating, isThinking, sendMessage, stopGeneration } =
@@ -359,9 +368,18 @@ function Sidebar() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
         {messages.map((msg, idx) => (
-          <ChatMessage key={idx} message={msg} appliedBlocks={appliedBlocks} />
+          <ChatMessage
+            key={idx}
+            message={msg}
+            appliedBlocks={appliedBlocks}
+            isLatest={idx === messages.length - 1}
+            isGenerating={
+              isThinking &&
+              idx === messages.length - 1 &&
+              msg.role === "assistant"
+            }
+          />
         ))}
-        {isThinking && <ThinkingIndicator />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -512,6 +530,9 @@ function Sidebar() {
                   </Dropdown.Option>
                   <Dropdown.Option value="azure" icon={AzureIcon}>
                     Azure
+                  </Dropdown.Option>
+                  <Dropdown.Option value="bedrock" icon={BedrockIcon}>
+                    Bedrock
                   </Dropdown.Option>
                 </Dropdown>
 

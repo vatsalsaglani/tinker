@@ -1175,12 +1175,57 @@ class ChatViewProvider {
       vscode.ConfigurationTarget.Global
     );
 
-    if (settings.provider === "azure" && settings.baseURL) {
-      await config.update(
-        "azureEndpoint",
-        settings.baseURL,
-        vscode.ConfigurationTarget.Global
-      );
+    // For Azure, get the endpoint from settings or load from stored config
+    let baseURL = settings.baseURL;
+    if (settings.provider === "azure") {
+      if (baseURL) {
+        // Save new endpoint if provided
+        await config.update(
+          "azureEndpoint",
+          baseURL,
+          vscode.ConfigurationTarget.Global
+        );
+      } else {
+        // Load stored endpoint if not provided (e.g., when just switching models)
+        baseURL = config.get("azureEndpoint", "");
+      }
+    }
+
+    // For Bedrock, handle AWS credentials
+    let awsAccessKey = settings.awsAccessKey;
+    let awsSecretKey = settings.awsSecretKey;
+    let awsRegion = settings.awsRegion;
+    if (settings.provider === "bedrock") {
+      if (awsAccessKey && awsSecretKey) {
+        // Store AWS credentials securely
+        await config.update(
+          "awsRegion",
+          awsRegion || "us-east-1",
+          vscode.ConfigurationTarget.Global
+        );
+        // Store AWS keys in VS Code secrets
+        if (this._context?.secrets) {
+          await this._context.secrets.store(
+            "bedrock_awsAccessKey",
+            awsAccessKey
+          );
+          await this._context.secrets.store(
+            "bedrock_awsSecretKey",
+            awsSecretKey
+          );
+        }
+      } else {
+        // Load stored credentials if not provided
+        awsRegion = config.get("awsRegion", "us-east-1");
+        if (this._context?.secrets) {
+          awsAccessKey = await this._context.secrets.get(
+            "bedrock_awsAccessKey"
+          );
+          awsSecretKey = await this._context.secrets.get(
+            "bedrock_awsSecretKey"
+          );
+        }
+      }
     }
 
     // Get existing API key if user didn't provide a new one
@@ -1215,8 +1260,12 @@ class ChatViewProvider {
       this.llmConnector.initProvider(settings.provider, {
         apiKey: apiKeyToUse,
         model: settings.model,
-        baseURL: settings.baseURL,
+        baseURL: baseURL,
         useResponsesAPI: settings.useResponsesAPI,
+        // Bedrock-specific
+        awsAccessKey: awsAccessKey,
+        awsSecretKey: awsSecretKey,
+        awsRegion: awsRegion,
       });
 
       vscode.window.showInformationMessage(`${settings.provider} configured`);
@@ -1234,10 +1283,21 @@ class ChatViewProvider {
     const model = config.get("model", "");
     const baseURL = config.get("azureEndpoint", "");
     const useResponsesAPI = config.get("useResponsesAPI", false);
+    const awsRegion = config.get("awsRegion", "us-east-1");
 
     let apiKey = "";
+    let awsAccessKey = "";
+    let awsSecretKey = "";
+
     if (this._context?.secrets) {
       apiKey = (await this._context.secrets.get(`${provider}_apiKey`)) || "";
+      // Load Bedrock credentials if that's the selected provider
+      if (provider === "bedrock") {
+        awsAccessKey =
+          (await this._context.secrets.get("bedrock_awsAccessKey")) || "";
+        awsSecretKey =
+          (await this._context.secrets.get("bedrock_awsSecretKey")) || "";
+      }
     }
 
     this._view?.webview.postMessage({
@@ -1248,17 +1308,40 @@ class ChatViewProvider {
         baseURL,
         useResponsesAPI,
         hasApiKey: !!apiKey,
+        hasBedrockCredentials: !!(awsAccessKey && awsSecretKey),
       },
     });
 
-    // Initialize if we have API key
-    if (apiKey) {
+    // Initialize provider based on type
+    if (provider === "bedrock") {
+      // Bedrock uses AWS credentials, not API key
+      if (awsAccessKey && awsSecretKey) {
+        try {
+          this.llmConnector.initProvider(provider, {
+            model,
+            awsAccessKey,
+            awsSecretKey,
+            awsRegion,
+          });
+          this.log(
+            `Provider ${provider} initialized on load with AWS credentials`
+          );
+        } catch (error) {
+          this.log("Failed to init Bedrock provider:", error);
+        }
+      } else {
+        this.log(
+          "No AWS credentials found for Bedrock, provider not initialized"
+        );
+      }
+    } else if (apiKey) {
+      // Other providers use API key
       try {
         this.llmConnector.initProvider(provider, {
           apiKey,
           model,
           baseURL,
-          useResponsesAPI, // Was missing before!
+          useResponsesAPI,
         });
         this.log(`Provider ${provider} initialized on load`);
       } catch (error) {
@@ -1296,6 +1379,10 @@ class ChatViewProvider {
       anthropic: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"],
       gemini: ["gemini-2.0-flash-exp", "gemini-1.5-pro"],
       azure: ["gpt-4", "gpt-35-turbo"],
+      bedrock: [
+        "anthropic.claude-sonnet-4-20250514-v1:0",
+        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      ],
     };
     const models = config.get("customModels", defaultModels);
 
@@ -1331,13 +1418,24 @@ class ChatViewProvider {
    * Load status of all provider API keys (just whether they exist, not the actual keys)
    */
   async loadAllProviderKeys() {
-    const providers = ["openai", "anthropic", "gemini", "azure"];
+    const providers = ["openai", "anthropic", "gemini", "azure", "bedrock"];
     const keyStatus = {};
 
     for (const provider of providers) {
       if (this._context?.secrets) {
-        const key = await this._context.secrets.get(`${provider}_apiKey`);
-        keyStatus[provider] = !!key;
+        if (provider === "bedrock") {
+          // Bedrock uses AWS credentials, not API key
+          const awsAccessKey = await this._context.secrets.get(
+            "bedrock_awsAccessKey"
+          );
+          const awsSecretKey = await this._context.secrets.get(
+            "bedrock_awsSecretKey"
+          );
+          keyStatus[provider] = !!(awsAccessKey && awsSecretKey);
+        } else {
+          const key = await this._context.secrets.get(`${provider}_apiKey`);
+          keyStatus[provider] = !!key;
+        }
       } else {
         keyStatus[provider] = false;
       }
@@ -1759,13 +1857,24 @@ class ChatViewProvider {
    * Load provider keys status to config panel
    */
   async loadAllProviderKeysToPanel() {
-    const providers = ["openai", "anthropic", "gemini", "azure"];
+    const providers = ["openai", "anthropic", "gemini", "azure", "bedrock"];
     const keyStatus = {};
 
     for (const provider of providers) {
       if (this._context?.secrets) {
-        const key = await this._context.secrets.get(`${provider}_apiKey`);
-        keyStatus[provider] = !!key;
+        if (provider === "bedrock") {
+          // Bedrock uses AWS credentials, not API key
+          const awsAccessKey = await this._context.secrets.get(
+            "bedrock_awsAccessKey"
+          );
+          const awsSecretKey = await this._context.secrets.get(
+            "bedrock_awsSecretKey"
+          );
+          keyStatus[provider] = !!(awsAccessKey && awsSecretKey);
+        } else {
+          const key = await this._context.secrets.get(`${provider}_apiKey`);
+          keyStatus[provider] = !!key;
+        }
       } else {
         keyStatus[provider] = false;
       }

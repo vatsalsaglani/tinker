@@ -1,14 +1,58 @@
 // @ts-nocheck
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import CodeBlock from "./CodeBlock";
 import ToolCall from "./ToolCall";
-import { User, Copy, Check, FileText, Zap, Scissors } from "lucide-react";
+import {
+  User,
+  Copy,
+  Check,
+  FileText,
+  Zap,
+  Scissors,
+  Sparkles,
+  Brain,
+  Code,
+  Search,
+  BookOpen,
+} from "lucide-react";
 import TinkerIcon from "./TinkerIcon";
 
-function ChatMessage({ message, appliedBlocks = new Set() }) {
+const thinkingPhrases = [
+  { text: "Analyzing...", icon: Search },
+  { text: "Thinking...", icon: Brain },
+  { text: "Processing...", icon: Zap },
+  { text: "Crafting...", icon: Code },
+  { text: "Generating...", icon: Sparkles },
+];
+
+function ChatMessage({
+  message,
+  appliedBlocks = new Set(),
+  isLatest = false,
+  isGenerating = false,
+}) {
+  // Rolodex animation state for thinking indicator
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [isFlipping, setIsFlipping] = useState(false);
+
+  useEffect(() => {
+    if (!isLatest || !isGenerating || message.role !== "assistant") return;
+
+    const interval = setInterval(() => {
+      setIsFlipping(true);
+      setTimeout(() => {
+        setPhraseIndex((prev) => (prev + 1) % thinkingPhrases.length);
+        setIsFlipping(false);
+      }, 400);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isLatest, isGenerating, message.role]);
+
+  const CurrentThinkingIcon = thinkingPhrases[phraseIndex].icon;
   const parseContent = (content) => {
     if (!content) return [];
 
@@ -126,12 +170,71 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
       }
     }
 
-    // Add remaining text
+    // Add remaining text - but check for incomplete/streaming blocks first
     if (lastIndex < content.length) {
-      segments.push({
-        type: "text",
-        content: content.substring(lastIndex),
-      });
+      let remainingContent = content.substring(lastIndex);
+
+      // Check for incomplete block markers (streaming in progress)
+      const incompleteBlockPatterns = [
+        {
+          pattern: /([^\n]+)\s*\n\s*<{3,}\s*REWRITE FILE\s*\n/i,
+          type: "rewrite",
+        },
+        { pattern: /([^\n]+)\s*\n\s*<{3,}\s*NEW FILE\s*\n/i, type: "new" },
+        { pattern: /([^\n]+)\s*\n\s*<{3,}\s*SEARCH\s*\n/i, type: "search" },
+      ];
+
+      for (const { pattern, type } of incompleteBlockPatterns) {
+        const match = remainingContent.match(pattern);
+        if (match) {
+          // Found an incomplete block - check if it lacks closing marker
+          const hasCloseMarker =
+            (type === "rewrite" &&
+              remainingContent.match(/>{3,}\s*(REWRITE FILE|REPLACE)/i)) ||
+            (type === "new" &&
+              remainingContent.match(/>{3,}\s*(NEW FILE|NEW)/i)) ||
+            (type === "search" && remainingContent.match(/>{3,}\s*REPLACE/i));
+
+          if (!hasCloseMarker) {
+            // Split: text before the block, then the incomplete block as raw code
+            const blockStartIndex = match.index;
+
+            // Add text before the incomplete block
+            if (blockStartIndex > 0) {
+              segments.push({
+                type: "text",
+                content: remainingContent.substring(0, blockStartIndex),
+              });
+            }
+
+            // Add the incomplete block as a streaming code block
+            const incompleteBlockContent =
+              remainingContent.substring(blockStartIndex);
+            const filePath = match[1]?.trim() || "Unknown File";
+
+            segments.push({
+              type: "block",
+              block: {
+                type: type === "search" ? "edit" : type,
+                filePath: filePath,
+                content: incompleteBlockContent.replace(match[0], "").trim(),
+                isIncomplete: true,
+              },
+            });
+
+            remainingContent = ""; // All remaining content handled
+            break;
+          }
+        }
+      }
+
+      // If there's still remaining content (no incomplete block found), add as text
+      if (remainingContent) {
+        segments.push({
+          type: "text",
+          content: remainingContent,
+        });
+      }
     }
 
     return segments;
@@ -226,10 +329,79 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
       const match = /language-(\w+)/.exec(className || "");
       const language = match ? match[1] : "";
 
-      // If inline code, just render normally
-      if (inline) {
+      // Language display name mapping
+      const languageNames = {
+        js: "JavaScript",
+        jsx: "JavaScript",
+        ts: "TypeScript",
+        tsx: "TypeScript",
+        py: "Python",
+        rb: "Ruby",
+        java: "Java",
+        go: "Go",
+        rs: "Rust",
+        cpp: "C++",
+        c: "C",
+        cs: "C#",
+        php: "PHP",
+        swift: "Swift",
+        kt: "Kotlin",
+        html: "HTML",
+        css: "CSS",
+        scss: "SCSS",
+        json: "JSON",
+        yaml: "YAML",
+        yml: "YAML",
+        md: "Markdown",
+        sql: "SQL",
+        sh: "Shell",
+        bash: "Bash",
+        zsh: "Shell",
+        xml: "XML",
+        vue: "Vue",
+        svelte: "Svelte",
+        javascript: "JavaScript",
+        typescript: "TypeScript",
+        python: "Python",
+        ruby: "Ruby",
+        rust: "Rust",
+        csharp: "C#",
+        kotlin: "Kotlin",
+        markdown: "Markdown",
+      };
+
+      const displayLang =
+        languageNames[language?.toLowerCase()] ||
+        language?.toUpperCase() ||
+        "CODE";
+
+      // Determine if this is inline code:
+      // 1. Check the explicit inline prop
+      // 2. Check if parent is not 'pre' (react-markdown way)
+      // 3. Single-line code without language is likely inline
+      const codeContent = String(children).replace(/\n$/, "");
+      const isSingleLine = !codeContent.includes("\n");
+      const hasNoLanguage = !language;
+
+      // If inline prop is explicitly true, or if it's a short single-line code without explicit language class
+      const isInlineCode =
+        inline === true ||
+        (node?.tagName === "code" &&
+          !node?.properties?.className &&
+          isSingleLine);
+
+      // If inline code, render with a modern inline style
+      if (isInlineCode) {
         return (
-          <code className={className} {...props}>
+          <code
+            className="px-1.5 py-0.5 rounded-md text-[13px] font-mono"
+            style={{
+              backgroundColor: "var(--vscode-textCodeBlock-background)",
+              color: "#e5c07b",
+              border: "1px solid var(--vscode-panel-border)",
+            }}
+            {...props}
+          >
             {children}
           </code>
         );
@@ -248,30 +420,74 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
       };
 
       return (
-        <div className="rounded-lg overflow-hidden border border-white/10 bg-[#0f172a]">
-          {/* Header bar with language and copy button */}
-          <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/10">
-            <span className="text-xs text-white/50 uppercase tracking-wide">
-              {language || "code"}
-            </span>
-            <button
-              onClick={handleCopy}
-              className="p-1 rounded hover:bg-white/10 transition-colors text-white/50 hover:text-white"
-              title={copied ? "Copied!" : "Copy to clipboard"}
+        <div
+          className="rounded-xl shadow-md overflow-hidden border"
+          style={{ borderColor: "var(--vscode-panel-border)" }}
+        >
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              backgroundColor: "var(--vscode-textCodeBlock-background)",
+            }}
+          >
+            {/* Header bar matching CodeBlock style */}
+            <div
+              className="flex items-center justify-between px-3 py-2 border-b"
+              style={{
+                backgroundColor: "var(--vscode-editor-background)",
+                borderColor: "var(--vscode-panel-border)",
+              }}
             >
-              {copied ? (
-                <Check size={14} className="text-green-400" />
-              ) : (
-                <Copy size={14} />
-              )}
-            </button>
+              <div
+                className="flex items-center gap-2 text-sm font-medium"
+                style={{ color: "var(--vscode-foreground)" }}
+              >
+                {/* Language badge */}
+                <span
+                  className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: "var(--vscode-badge-background)",
+                    color: "var(--vscode-badge-foreground)",
+                  }}
+                >
+                  {displayLang}
+                </span>
+              </div>
+
+              {/* Copy button */}
+              <button
+                onClick={handleCopy}
+                className="text-[10px] px-3 py-1 rounded-lg inline-flex items-center gap-1 transition-all bg-white/5 hover:bg-white/10"
+                style={{ color: "var(--vscode-foreground)" }}
+                title={copied ? "Copied!" : "Copy to clipboard"}
+              >
+                {copied ? (
+                  <>
+                    <Check size={10} className="text-green-400" />
+                    <span className="text-green-400">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={10} />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Code content */}
+            <div className="tinker-code overflow-x-auto font-mono text-xs p-3">
+              <pre className="m-0">
+                <code
+                  ref={codeRef}
+                  className={`hljs ${className || ""}`}
+                  {...props}
+                >
+                  {children}
+                </code>
+              </pre>
+            </div>
           </div>
-          {/* Code content */}
-          <pre className="m-0 p-3 overflow-x-auto">
-            <code ref={codeRef} className={className} {...props}>
-              {children}
-            </code>
-          </pre>
         </div>
       );
     },
@@ -281,6 +497,8 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
   // Markdown components with custom code renderer
   const markdownComponents = {
     code: CopyableCodeBlock,
+    // Custom pre to avoid double styling - code blocks handle their own pre
+    pre: ({ children }) => <>{children}</>,
   };
 
   const renderContent = () => {
@@ -516,6 +734,39 @@ function ChatMessage({ message, appliedBlocks = new Set() }) {
         >
           {message.role === "user" ? "You" : "Tinker"}
         </span>
+
+        {/* Rolodex thinking animation - only on latest assistant message while generating */}
+        {message.role === "assistant" && isLatest && isGenerating && (
+          <>
+            <span className="text-white/30 text-xs">•</span>
+            <div className="flex items-center gap-1.5">
+              <BookOpen size={12} className="text-tinker-copper/40" />
+              <div
+                className="h-4 overflow-hidden"
+                style={{ perspective: "120px", minWidth: "75px" }}
+              >
+                <div
+                  className="transition-all duration-400 ease-in-out"
+                  style={{
+                    transformStyle: "preserve-3d",
+                    transform: isFlipping ? "rotateX(-90deg)" : "rotateX(0deg)",
+                    transformOrigin: "center bottom",
+                  }}
+                >
+                  <div className="flex items-center gap-1">
+                    <CurrentThinkingIcon
+                      size={10}
+                      className="text-tinker-copper/60"
+                    />
+                    <span className="text-xs text-white/50">
+                      {thinkingPhrases[phraseIndex].text}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Message content */}

@@ -2,7 +2,13 @@
 import React, { useState, useEffect } from "react";
 import { X, Save, Settings, Key, ExternalLink } from "lucide-react";
 import { useVSCodeMessage } from "../hooks/useVSCodeMessage";
-import { OpenAIIcon, ClaudeIcon, GeminiIcon, AzureIcon } from "../icons";
+import {
+  OpenAIIcon,
+  ClaudeIcon,
+  GeminiIcon,
+  AzureIcon,
+  BedrockIcon,
+} from "../icons";
 import Switch from "./Switch";
 
 const providers = [
@@ -10,6 +16,7 @@ const providers = [
   { value: "anthropic", label: "Anthropic", icon: ClaudeIcon },
   { value: "gemini", label: "Gemini", icon: GeminiIcon },
   { value: "azure", label: "Azure", icon: AzureIcon },
+  { value: "bedrock", label: "Bedrock", icon: BedrockIcon },
 ];
 
 function SettingsPanel({ onClose }) {
@@ -24,6 +31,7 @@ function SettingsPanel({ onClose }) {
     anthropic: false,
     gemini: false,
     azure: false,
+    bedrock: false,
   });
 
   const [isSaving, setIsSaving] = useState(false);

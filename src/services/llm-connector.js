@@ -1,6 +1,8 @@
 const OpenAIProvider = require("../providers/openai-provider");
 const AnthropicProvider = require("../providers/anthropic-provider");
 const GeminiProvider = require("../providers/gemini-provider");
+const AzureProvider = require("../providers/azure-provider");
+const BedrockProvider = require("../providers/bedrock-provider");
 const { generateSystemPrompt, getOSName } = require("../prompts/system-prompt");
 
 /**
@@ -14,7 +16,7 @@ class LLMConnector {
 
   /**
    * Initialize a provider
-   * @param {string} providerName - 'openai', 'anthropic', 'gemini', 'azure'
+   * @param {string} providerName - 'openai', 'anthropic', 'gemini', 'azure', 'bedrock'
    * @param {Object} config - Provider configuration
    */
   initProvider(providerName, config) {
@@ -29,9 +31,21 @@ class LLMConnector {
         this.currentProvider = new GeminiProvider(config);
         break;
       case "azure":
-        this.currentProvider = new OpenAIProvider({
+        // Pass the endpoint URL from multiple possible config sources
+        const azureEndpoint =
+          config.baseURL || config.endpoint || config.azureEndpoint;
+        this.currentProvider = new AzureProvider({
           ...config,
-          baseURL: config.baseURL || config.endpoint || config.azureEndpoint,
+          endpoint: azureEndpoint,
+          baseURL: azureEndpoint, // Also set baseURL so provider can find it either way
+        });
+        break;
+      case "bedrock":
+        this.currentProvider = new BedrockProvider({
+          ...config,
+          awsAccessKey: config.awsAccessKey,
+          awsSecretKey: config.awsSecretKey,
+          awsRegion: config.awsRegion || "us-east-1",
         });
         break;
       default:

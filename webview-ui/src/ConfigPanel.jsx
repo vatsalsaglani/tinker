@@ -1,8 +1,23 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { Save, Eye, EyeOff, Check, Key, Box, Trash2 } from "lucide-react";
-import { OpenAIIcon, ClaudeIcon, GeminiIcon, AzureIcon } from "./icons";
+import {
+  Save,
+  Eye,
+  EyeOff,
+  Check,
+  Key,
+  Box,
+  Trash2,
+  Globe,
+} from "lucide-react";
+import {
+  OpenAIIcon,
+  ClaudeIcon,
+  GeminiIcon,
+  AzureIcon,
+  BedrockIcon,
+} from "./icons";
 import ModelManager from "./components/ModelManager";
 import Switch from "./components/Switch";
 
@@ -15,6 +30,7 @@ const providers = [
   { value: "anthropic", label: "Anthropic", icon: ClaudeIcon },
   { value: "gemini", label: "Gemini", icon: GeminiIcon },
   { value: "azure", label: "Azure", icon: AzureIcon },
+  { value: "bedrock", label: "Bedrock", icon: BedrockIcon },
 ];
 
 function ConfigPanel() {
@@ -26,6 +42,7 @@ function ConfigPanel() {
     anthropic: "",
     gemini: "",
     azure: "",
+    bedrock: "", // Not used for bedrock, but kept for consistency
   });
 
   // Which providers have saved keys
@@ -34,6 +51,7 @@ function ConfigPanel() {
     anthropic: false,
     gemini: false,
     azure: false,
+    bedrock: false,
   });
 
   // Show/hide API key toggles per provider
@@ -42,6 +60,7 @@ function ConfigPanel() {
     anthropic: false,
     gemini: false,
     azure: false,
+    bedrock: false,
   });
 
   // Custom models per provider
@@ -50,10 +69,19 @@ function ConfigPanel() {
     anthropic: [],
     gemini: [],
     azure: [],
+    bedrock: [],
   });
 
   // Azure endpoint
   const [azureEndpoint, setAzureEndpoint] = useState("");
+
+  // Bedrock AWS credentials
+  const [bedrockConfig, setBedrockConfig] = useState({
+    awsAccessKey: "",
+    awsSecretKey: "",
+    awsRegion: "us-east-1",
+  });
+  const [showBedrockSecretKey, setShowBedrockSecretKey] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
@@ -127,6 +155,22 @@ function ConfigPanel() {
       settings: { baseURL: azureEndpoint, provider: "azure", apiKey: "" },
     });
     setSaveStatus("Azure endpoint saved!");
+    setTimeout(() => setSaveStatus(""), 2000);
+  };
+
+  const handleSaveBedrockConfig = () => {
+    vscode?.postMessage({
+      type: "saveSettings",
+      settings: {
+        provider: "bedrock",
+        awsAccessKey: bedrockConfig.awsAccessKey,
+        awsSecretKey: bedrockConfig.awsSecretKey,
+        awsRegion: bedrockConfig.awsRegion,
+      },
+    });
+    // Mark bedrock as having saved credentials
+    setKeyStatus((prev) => ({ ...prev, bedrock: true }));
+    setSaveStatus("Bedrock AWS credentials saved!");
     setTimeout(() => setSaveStatus(""), 2000);
   };
 
@@ -324,6 +368,128 @@ function ConfigPanel() {
                   Save
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Bedrock AWS Credentials (only for Bedrock) */}
+          {activeProvider === "bedrock" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Globe size={14} className="text-orange-400" />
+                <label className="text-sm font-medium text-white/80">
+                  AWS Credentials
+                </label>
+                {keyStatus.bedrock && (
+                  <span className="text-xs text-green-400 flex items-center gap-1 bg-green-500/10 px-2 py-0.5 rounded-full">
+                    <Check size={10} /> Configured
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-white/40 mb-3">
+                Enter your AWS credentials to access Claude models via Amazon
+                Bedrock
+              </p>
+
+              {/* Access Key */}
+              <div>
+                <label className="text-xs text-white/60 mb-1 block">
+                  AWS Access Key ID
+                </label>
+                <input
+                  type="text"
+                  value={bedrockConfig.awsAccessKey}
+                  onChange={(e) =>
+                    setBedrockConfig((prev) => ({
+                      ...prev,
+                      awsAccessKey: e.target.value,
+                    }))
+                  }
+                  placeholder="AKIAIOSFODNN7EXAMPLE"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
+                />
+              </div>
+
+              {/* Secret Key */}
+              <div>
+                <label className="text-xs text-white/60 mb-1 block">
+                  AWS Secret Access Key
+                </label>
+                <div className="relative">
+                  <input
+                    type={showBedrockSecretKey ? "text" : "password"}
+                    value={bedrockConfig.awsSecretKey}
+                    onChange={(e) =>
+                      setBedrockConfig((prev) => ({
+                        ...prev,
+                        awsSecretKey: e.target.value,
+                      }))
+                    }
+                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
+                  />
+                  <button
+                    onClick={() => setShowBedrockSecretKey((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors"
+                  >
+                    {showBedrockSecretKey ? (
+                      <EyeOff size={14} />
+                    ) : (
+                      <Eye size={14} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Region */}
+              <div>
+                <label className="text-xs text-white/60 mb-1 block">
+                  AWS Region
+                </label>
+                <select
+                  value={bedrockConfig.awsRegion}
+                  onChange={(e) =>
+                    setBedrockConfig((prev) => ({
+                      ...prev,
+                      awsRegion: e.target.value,
+                    }))
+                  }
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500/50"
+                >
+                  <option value="us-east-1">
+                    US East (N. Virginia) - us-east-1
+                  </option>
+                  <option value="us-west-2">
+                    US West (Oregon) - us-west-2
+                  </option>
+                  <option value="eu-west-1">
+                    Europe (Ireland) - eu-west-1
+                  </option>
+                  <option value="eu-west-3">Europe (Paris) - eu-west-3</option>
+                  <option value="eu-central-1">
+                    Europe (Frankfurt) - eu-central-1
+                  </option>
+                  <option value="ap-southeast-1">
+                    Asia Pacific (Singapore) - ap-southeast-1
+                  </option>
+                  <option value="ap-southeast-2">
+                    Asia Pacific (Sydney) - ap-southeast-2
+                  </option>
+                  <option value="ap-northeast-1">
+                    Asia Pacific (Tokyo) - ap-northeast-1
+                  </option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleSaveBedrockConfig}
+                disabled={
+                  !bedrockConfig.awsAccessKey || !bedrockConfig.awsSecretKey
+                }
+                className="w-full px-5 py-3 rounded-xl bg-orange-500 text-white text-sm font-medium hover:bg-orange-500/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Save size={14} />
+                Save AWS Credentials
+              </button>
             </div>
           )}
 
