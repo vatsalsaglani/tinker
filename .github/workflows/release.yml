@@ -86,7 +86,7 @@ jobs:
             3. Select the downloaded file
             
             ### What's New
-            See [CHANGELOG](https://github.com/vatsalsaglani/tinker/blob/main/CHANGELOG.md) for details.
+            See [Release Notes](https://github.com/vatsalsaglani/tinker#release-notes) for details.
           files: |
             ${{ steps.package.outputs.vsix_file }}
           draft: false

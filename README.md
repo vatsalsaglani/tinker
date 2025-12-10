@@ -70,6 +70,20 @@ API keys and AWS credentials are stored securely in VS Code's encrypted secret s
 
 ## Release Notes
 
+See [full changelog](#release-notes) for all versions.
+
+### 0.0.4
+
+- 🔧 **VS Code Fork Compatibility Fix** - Improved secret storage with fallback to globalState for better compatibility with Cursor, Kiro, and other VS Code forks
+- 📝 **AWS Region Input** - Changed from dropdown to text input for flexibility with any AWS region
+- 🧹 **Production Ready** - Disabled debug file logging by default for cleaner production builds
+- ⚙️ **Configuration Fix** - Added `awsRegion` to registered configuration settings
+
+### 0.0.3
+
+- 🔐 **Improved Credential Storage** - Better handling of Bedrock AWS credentials on extension load
+- 🐛 **Bug Fixes** - Fixed credential loading for Bedrock provider initialization
+
 ### 0.0.2
 
 - ☁️ **Amazon Bedrock Support** - Access Claude models via AWS Bedrock with IAM credentials
@@ -90,4 +104,3 @@ Initial release:
 ---
 
 **Enjoy coding with Tinker!** 🛠️
-
