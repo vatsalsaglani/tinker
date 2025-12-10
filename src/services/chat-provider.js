@@ -29,6 +29,98 @@ class ChatViewProvider {
     this.storage = new ConversationStore(context);
   }
 
+  /**
+   * Get a secret value with fallback to globalState for VS Code forks
+   * that may not fully implement the secrets API (e.g., Cursor, Kiro)
+   */
+  async getSecret(key) {
+    try {
+      // First try the secrets API
+      if (this._context?.secrets) {
+        const value = await this._context.secrets.get(key);
+        if (value) {
+          this.log(`[Secrets] Retrieved '${key}' from secrets API`);
+          return value;
+        }
+      }
+    } catch (error) {
+      this.log(`[Secrets] Error reading from secrets API: ${error.message}`);
+    }
+
+    // Fallback to globalState (less secure but more compatible)
+    try {
+      if (this._context?.globalState) {
+        const value = this._context.globalState.get(`secret_${key}`);
+        if (value) {
+          this.log(`[Secrets] Retrieved '${key}' from globalState fallback`);
+          return value;
+        }
+      }
+    } catch (error) {
+      this.log(`[Secrets] Error reading from globalState: ${error.message}`);
+    }
+
+    this.log(`[Secrets] No value found for '${key}' in secrets or globalState`);
+    return null;
+  }
+
+  /**
+   * Store a secret value - tries secrets API first, falls back to globalState
+   */
+  async setSecret(key, value) {
+    let storedInSecrets = false;
+
+    // Try secrets API first
+    try {
+      if (this._context?.secrets) {
+        await this._context.secrets.store(key, value);
+        storedInSecrets = true;
+        this.log(`[Secrets] Stored '${key}' in secrets API`);
+      }
+    } catch (error) {
+      this.log(`[Secrets] Error storing in secrets API: ${error.message}`);
+    }
+
+    // Also store in globalState as fallback (for forks that lose secrets)
+    try {
+      if (this._context?.globalState) {
+        await this._context.globalState.update(`secret_${key}`, value);
+        if (!storedInSecrets) {
+          this.log(`[Secrets] Stored '${key}' in globalState fallback`);
+        }
+      }
+    } catch (error) {
+      this.log(`[Secrets] Error storing in globalState: ${error.message}`);
+    }
+
+    return storedInSecrets;
+  }
+
+  /**
+   * Delete a secret value from both storage locations
+   */
+  async deleteSecret(key) {
+    // Delete from secrets API
+    try {
+      if (this._context?.secrets) {
+        await this._context.secrets.delete(key);
+        this.log(`[Secrets] Deleted '${key}' from secrets API`);
+      }
+    } catch (error) {
+      this.log(`[Secrets] Error deleting from secrets API: ${error.message}`);
+    }
+
+    // Also delete from globalState
+    try {
+      if (this._context?.globalState) {
+        await this._context.globalState.update(`secret_${key}`, undefined);
+        this.log(`[Secrets] Deleted '${key}' from globalState`);
+      }
+    } catch (error) {
+      this.log(`[Secrets] Error deleting from globalState: ${error.message}`);
+    }
+  }
+
   log(message, ...args) {
     const timestamp = new Date().toISOString().substring(11, 23);
     const logMessage = `[${timestamp}] ${message}`;
@@ -663,20 +755,6 @@ class ChatViewProvider {
           return result;
         };
 
-        // Create timestamped log file path
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const logPath = this.workspaceTools.workspaceRoot
-          ? require("path").join(
-              this.workspaceTools.workspaceRoot,
-              `tinker_stream_${timestamp}.txt`
-            )
-          : null;
-
-        // Initialize log file
-        if (logPath) {
-          require("fs").writeFileSync(logPath, "");
-        }
-
         const streamResult = await this.llmConnector.streamChat(
           messages,
           (chunk) => {
@@ -686,11 +764,6 @@ class ChatViewProvider {
 
             turnResponse += chunk;
             fullResponse += chunk;
-
-            // Append to log file if workspace is open
-            if (logPath) {
-              require("fs").appendFileSync(logPath, chunk);
-            }
 
             this._view.webview.postMessage({
               type: "assistantChunk",
@@ -1203,54 +1276,35 @@ class ChatViewProvider {
           awsRegion || "us-east-1",
           vscode.ConfigurationTarget.Global
         );
-        // Store AWS keys in VS Code secrets
-        if (this._context?.secrets) {
-          await this._context.secrets.store(
-            "bedrock_awsAccessKey",
-            awsAccessKey
-          );
-          await this._context.secrets.store(
-            "bedrock_awsSecretKey",
-            awsSecretKey
-          );
-        }
+        // Store AWS keys using helper method (with fallback)
+        await this.setSecret("bedrock_awsAccessKey", awsAccessKey);
+        await this.setSecret("bedrock_awsSecretKey", awsSecretKey);
       } else {
         // Load stored credentials if not provided
         awsRegion = config.get("awsRegion", "us-east-1");
-        if (this._context?.secrets) {
-          awsAccessKey = await this._context.secrets.get(
-            "bedrock_awsAccessKey"
-          );
-          awsSecretKey = await this._context.secrets.get(
-            "bedrock_awsSecretKey"
-          );
-        }
+        awsAccessKey = await this.getSecret("bedrock_awsAccessKey");
+        awsSecretKey = await this.getSecret("bedrock_awsSecretKey");
       }
     }
 
     // Get existing API key if user didn't provide a new one
     let apiKeyToUse = settings.apiKey;
-    if (!apiKeyToUse && this._context?.secrets) {
-      apiKeyToUse = await this._context.secrets.get(
-        `${settings.provider}_apiKey`
-      );
+    if (!apiKeyToUse) {
+      apiKeyToUse = await this.getSecret(`${settings.provider}_apiKey`);
     }
 
     // Handle API key storage based on rememberApiKey setting
     // Only modify stored keys if rememberApiKey is explicitly set
-    if (this._context?.secrets && settings.rememberApiKey !== undefined) {
+    if (settings.rememberApiKey !== undefined) {
       if (settings.rememberApiKey) {
         // Store API key if user wants to remember it
         if (settings.apiKey) {
-          await this._context.secrets.store(
-            `${settings.provider}_apiKey`,
-            settings.apiKey
-          );
+          await this.setSecret(`${settings.provider}_apiKey`, settings.apiKey);
           vscode.window.showInformationMessage("API key saved securely");
         }
       } else {
         // Delete stored API key if user explicitly unchecked rememberApiKey
-        await this._context.secrets.delete(`${settings.provider}_apiKey`);
+        await this.deleteSecret(`${settings.provider}_apiKey`);
         vscode.window.showInformationMessage("API key will not be saved");
       }
     }
@@ -1289,15 +1343,12 @@ class ChatViewProvider {
     let awsAccessKey = "";
     let awsSecretKey = "";
 
-    if (this._context?.secrets) {
-      apiKey = (await this._context.secrets.get(`${provider}_apiKey`)) || "";
-      // Load Bedrock credentials if that's the selected provider
-      if (provider === "bedrock") {
-        awsAccessKey =
-          (await this._context.secrets.get("bedrock_awsAccessKey")) || "";
-        awsSecretKey =
-          (await this._context.secrets.get("bedrock_awsSecretKey")) || "";
-      }
+    // Use helper method that falls back to globalState for VS Code forks
+    apiKey = (await this.getSecret(`${provider}_apiKey`)) || "";
+    // Load Bedrock credentials if that's the selected provider
+    if (provider === "bedrock") {
+      awsAccessKey = (await this.getSecret("bedrock_awsAccessKey")) || "";
+      awsSecretKey = (await this.getSecret("bedrock_awsSecretKey")) || "";
     }
 
     this._view?.webview.postMessage({
@@ -1396,18 +1447,11 @@ class ChatViewProvider {
    * Save API key for a specific provider
    */
   async saveProviderApiKey(provider, apiKey) {
-    if (!this._context?.secrets) {
-      vscode.window.showErrorMessage(
-        "Cannot save API key: secrets not available"
-      );
-      return;
-    }
-
     if (apiKey) {
-      await this._context.secrets.store(`${provider}_apiKey`, apiKey);
+      await this.setSecret(`${provider}_apiKey`, apiKey);
       vscode.window.showInformationMessage(`${provider} API key saved`);
     } else {
-      await this._context.secrets.delete(`${provider}_apiKey`);
+      await this.deleteSecret(`${provider}_apiKey`);
     }
 
     // Send back status of all provider keys
@@ -1422,22 +1466,14 @@ class ChatViewProvider {
     const keyStatus = {};
 
     for (const provider of providers) {
-      if (this._context?.secrets) {
-        if (provider === "bedrock") {
-          // Bedrock uses AWS credentials, not API key
-          const awsAccessKey = await this._context.secrets.get(
-            "bedrock_awsAccessKey"
-          );
-          const awsSecretKey = await this._context.secrets.get(
-            "bedrock_awsSecretKey"
-          );
-          keyStatus[provider] = !!(awsAccessKey && awsSecretKey);
-        } else {
-          const key = await this._context.secrets.get(`${provider}_apiKey`);
-          keyStatus[provider] = !!key;
-        }
+      if (provider === "bedrock") {
+        // Bedrock uses AWS credentials, not API key
+        const awsAccessKey = await this.getSecret("bedrock_awsAccessKey");
+        const awsSecretKey = await this.getSecret("bedrock_awsSecretKey");
+        keyStatus[provider] = !!(awsAccessKey && awsSecretKey);
       } else {
-        keyStatus[provider] = false;
+        const key = await this.getSecret(`${provider}_apiKey`);
+        keyStatus[provider] = !!key;
       }
     }
 
@@ -1861,22 +1897,14 @@ class ChatViewProvider {
     const keyStatus = {};
 
     for (const provider of providers) {
-      if (this._context?.secrets) {
-        if (provider === "bedrock") {
-          // Bedrock uses AWS credentials, not API key
-          const awsAccessKey = await this._context.secrets.get(
-            "bedrock_awsAccessKey"
-          );
-          const awsSecretKey = await this._context.secrets.get(
-            "bedrock_awsSecretKey"
-          );
-          keyStatus[provider] = !!(awsAccessKey && awsSecretKey);
-        } else {
-          const key = await this._context.secrets.get(`${provider}_apiKey`);
-          keyStatus[provider] = !!key;
-        }
+      if (provider === "bedrock") {
+        // Bedrock uses AWS credentials, not API key
+        const awsAccessKey = await this.getSecret("bedrock_awsAccessKey");
+        const awsSecretKey = await this.getSecret("bedrock_awsSecretKey");
+        keyStatus[provider] = !!(awsAccessKey && awsSecretKey);
       } else {
-        keyStatus[provider] = false;
+        const key = await this.getSecret(`${provider}_apiKey`);
+        keyStatus[provider] = !!key;
       }
     }
 

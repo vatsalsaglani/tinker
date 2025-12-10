@@ -2,7 +2,7 @@
   "name": "tinker",
   "displayName": "Tinker",
   "description": "Open-source Coding Agent - BYOK",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "author": "vatsalsaglani",
   "publisher": "vatsalsaglani",
   "icon": "media/tinker-logo-v2.png",
@@ -138,6 +138,11 @@
           "default": "",
           "description": "Azure OpenAI endpoint URL"
         },
+        "tinkerAssistant.awsRegion": {
+          "type": "string",
+          "default": "us-east-1",
+          "description": "AWS region for Amazon Bedrock"
+        },
         "tinkerAssistant.customModels": {
           "type": "object",
           "default": {
@@ -157,6 +162,10 @@
             "azure": [
               "gpt-4",
               "gpt-35-turbo"
+            ],
+            "bedrock": [
+              "anthropic.claude-sonnet-4-20250514-v1:0",
+              "anthropic.claude-3-5-sonnet-20241022-v2:0"
             ]
           },
           "description": "Custom models per provider"

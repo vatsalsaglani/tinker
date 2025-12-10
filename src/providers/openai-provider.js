@@ -15,9 +15,9 @@ class OpenAIProvider extends BaseProvider {
     this.defaultModel = config.model || "gpt-5-mini";
     this.useResponsesAPI = config.useResponsesAPI || false;
 
-    // Debug logging setup - use home directory
+    // Debug logging setup - disabled by default for production
     this.debugDir = config.debugDir || path.join(os.homedir(), ".tinker-debug");
-    this.enableDebugLogging = true;
+    this.enableDebugLogging = config.enableDebugLogging || false;
   }
 
   getName() {

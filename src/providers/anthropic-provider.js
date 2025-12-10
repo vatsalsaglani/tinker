@@ -12,9 +12,9 @@ class AnthropicProvider extends BaseProvider {
     });
     this.defaultModel = config.model || "claude-sonnet-4-20250514";
 
-    // Debug logging setup
+    // Debug logging setup - disabled by default for production
     this.debugDir = config.debugDir || path.join(os.homedir(), ".tinker-debug");
-    this.enableDebugLogging = true;
+    this.enableDebugLogging = config.enableDebugLogging || false;
   }
 
   getName() {

@@ -445,7 +445,8 @@ function ConfigPanel() {
                 <label className="text-xs text-white/60 mb-1 block">
                   AWS Region
                 </label>
-                <select
+                <input
+                  type="text"
                   value={bedrockConfig.awsRegion}
                   onChange={(e) =>
                     setBedrockConfig((prev) => ({
@@ -453,31 +454,9 @@ function ConfigPanel() {
                       awsRegion: e.target.value,
                     }))
                   }
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500/50"
-                >
-                  <option value="us-east-1">
-                    US East (N. Virginia) - us-east-1
-                  </option>
-                  <option value="us-west-2">
-                    US West (Oregon) - us-west-2
-                  </option>
-                  <option value="eu-west-1">
-                    Europe (Ireland) - eu-west-1
-                  </option>
-                  <option value="eu-west-3">Europe (Paris) - eu-west-3</option>
-                  <option value="eu-central-1">
-                    Europe (Frankfurt) - eu-central-1
-                  </option>
-                  <option value="ap-southeast-1">
-                    Asia Pacific (Singapore) - ap-southeast-1
-                  </option>
-                  <option value="ap-southeast-2">
-                    Asia Pacific (Sydney) - ap-southeast-2
-                  </option>
-                  <option value="ap-northeast-1">
-                    Asia Pacific (Tokyo) - ap-northeast-1
-                  </option>
-                </select>
+                  placeholder="us-east-1"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-orange-500/50"
+                />
               </div>
 
               <button

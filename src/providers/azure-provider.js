@@ -53,9 +53,9 @@ class AzureProvider extends BaseProvider {
 
     this.defaultModel = this.deploymentName;
 
-    // Debug logging setup
+    // Debug logging setup - disabled by default for production
     this.debugDir = config.debugDir || path.join(os.homedir(), ".tinker-debug");
-    this.enableDebugLogging = true;
+    this.enableDebugLogging = config.enableDebugLogging || false;
   }
 
   getName() {
