@@ -6,14 +6,25 @@
 
 ## Features
 
-- 🤖 **Multi-Provider Support** - OpenAI, Anthropic, Google Gemini, and Azure OpenAI
+- 🤖 **Multi-Provider Support** - OpenAI, Anthropic, Google Gemini, Azure OpenAI, and Amazon Bedrock
 - 🔑 **Secure API Key Storage** - Keys stored in VS Code's encrypted secret storage
-- 💬 **Chat Interface** - Modern chat UI with markdown and code highlighting
+- 💬 **Chat Interface** - Modern chat UI with markdown and syntax-highlighted code blocks
 - 📁 **Context-Aware** - Add files and symbols to your prompts with `#` and `@`
 - 🖼️ **Image Support** - Drag & drop or paste images for vision models
 - 🔧 **Tool Integration** - File operations, code search, and more
 - 🎨 **Theme Support** - Works with both light and dark VS Code themes
 - ⚡ **Responses API** - Optional support for OpenAI's Responses API
+- 🌐 **VS Code Fork Compatible** - Works with Cursor, Kiro, Antigravity, and other forks
+
+## Supported Providers
+
+| Provider | Auth Method | Models |
+|----------|-------------|--------|
+| **OpenAI** | API Key | GPT-4o, GPT-4, o1, etc. |
+| **Anthropic** | API Key | Claude Sonnet 4, Claude 3.5, etc. |
+| **Google Gemini** | API Key | Gemini 2.0 Flash, Gemini 1.5 Pro, etc. |
+| **Azure OpenAI** | API Key + Endpoint | GPT-4, GPT-3.5 Turbo, etc. |
+| **Amazon Bedrock** | AWS Credentials | Claude models via Bedrock |
 
 ## Getting Started
 
@@ -21,6 +32,14 @@
 2. Click the settings icon to configure your API key
 3. Select your preferred provider and model
 4. Start chatting!
+
+### Configuring Amazon Bedrock
+
+For Bedrock, you'll need AWS credentials instead of an API key:
+1. Go to the Config Panel (gear icon)
+2. Select "Bedrock" as your provider
+3. Enter your AWS Access Key ID, Secret Access Key, and Region
+4. Save credentials - they're stored securely in VS Code's encrypted storage
 
 ## Keyboard Shortcuts
 
@@ -34,20 +53,30 @@
 
 This extension contributes the following settings:
 
-* `tinker.provider` - Active AI provider (openai, anthropic, gemini, azure)
+* `tinker.provider` - Active AI provider (openai, anthropic, gemini, azure, bedrock)
 * `tinker.model` - Selected model for the active provider
 * `tinker.customModels` - Custom models per provider
+* `tinker.azureEndpoint` - Azure OpenAI endpoint URL
+* `tinker.awsRegion` - AWS region for Bedrock
 
 ## Requirements
 
-- VS Code 1.106.0 or higher
-- Valid API key for your chosen provider
+- VS Code 1.85.0 or higher (compatible with VS Code forks)
+- Valid API key or credentials for your chosen provider
 
 ## Privacy
 
-API keys are stored securely in VS Code's encrypted secret storage and are never transmitted except to the provider you configure.
+API keys and AWS credentials are stored securely in VS Code's encrypted secret storage and are never transmitted except to the provider you configure.
 
 ## Release Notes
+
+### 0.0.2
+
+- ☁️ **Amazon Bedrock Support** - Access Claude models via AWS Bedrock with IAM credentials
+- 🎨 **Improved Code Blocks** - Sleek, modern styling for all code blocks with syntax highlighting
+- 💭 **Inline Thinking Indicator** - Animated thinking indicator shown directly in chat messages
+- 🔄 **Better Streaming** - Fixed code block rendering during streaming responses
+- 🌐 **VS Code Fork Compatibility** - Lowered version requirement to 1.85.0 for better compatibility
 
 ### 0.0.1
 
@@ -61,3 +90,4 @@ Initial release:
 ---
 
 **Enjoy coding with Tinker!** 🛠️
+
