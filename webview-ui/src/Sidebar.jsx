@@ -39,17 +39,25 @@ function Sidebar() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Custom models per provider
+  // Custom models per provider (for non-Bedrock providers)
   const [customModels, setCustomModels] = useState({
     openai: ["gpt-4o", "gpt-4", "o1"],
     anthropic: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"],
     gemini: ["gemini-2.0-flash-exp", "gemini-1.5-pro"],
     azure: ["gpt-4", "gpt-35-turbo"],
-    bedrock: [
-      "anthropic.claude-sonnet-4-20250514-v1:0",
-      "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    ],
   });
+
+  // Bedrock models with display name → model ID mapping
+  const [bedrockModels, setBedrockModels] = useState([
+    {
+      displayName: "Claude Sonnet 4",
+      modelId: "anthropic.claude-sonnet-4-20250514-v1:0",
+    },
+    {
+      displayName: "Claude 3.5 Sonnet",
+      modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    },
+  ]);
 
   const { messages, isGenerating, isThinking, sendMessage, stopGeneration } =
     useChat();
@@ -84,6 +92,10 @@ function Sidebar() {
       setUseResponsesAPI(message.settings.useResponsesAPI || false);
     } else if (message.type === "customModelsLoaded") {
       setCustomModels(message.models || {});
+    } else if (message.type === "bedrockModelsLoaded") {
+      setBedrockModels(message.models || []);
+    } else if (message.type === "bedrockModelsSaved") {
+      setBedrockModels(message.models || []);
     } else if (message.type === "blockApplied") {
       // Mark block as applied - handle both formats:
       // 1. Direct blockKey (from NEW FILE and REWRITE FILE)
@@ -109,8 +121,14 @@ function Sidebar() {
   const updateProvider = (provider) => {
     setSelectedProvider(provider);
     // Reset to first model of the new provider
-    const newProviderModels = customModels[provider] || [];
-    const newModel = newProviderModels[0] || "";
+    let newModel = "";
+    if (provider === "bedrock") {
+      // For Bedrock, use modelId from the first model
+      newModel = bedrockModels[0]?.modelId || "";
+    } else {
+      const newProviderModels = customModels[provider] || [];
+      newModel = newProviderModels[0] || "";
+    }
     setSelectedModel(newModel);
     vscode.postMessage({
       type: "saveSettings",
@@ -543,12 +561,31 @@ function Sidebar() {
                   direction="top"
                   triggerClassName="bg-white/5 border-white/10 min-w-[100px]"
                   placeholder="model"
+                  renderValue={(value) => {
+                    // For Bedrock, find and display the friendly name
+                    if (selectedProvider === "bedrock") {
+                      const model = bedrockModels.find(
+                        (m) => m.modelId === value
+                      );
+                      return model?.displayName || value;
+                    }
+                    return value;
+                  }}
                 >
-                  {(customModels[selectedProvider] || []).map((model) => (
-                    <Dropdown.Option key={model} value={model}>
-                      {model}
-                    </Dropdown.Option>
-                  ))}
+                  {selectedProvider === "bedrock"
+                    ? bedrockModels.map((model) => (
+                        <Dropdown.Option
+                          key={model.modelId}
+                          value={model.modelId}
+                        >
+                          {model.displayName}
+                        </Dropdown.Option>
+                      ))
+                    : (customModels[selectedProvider] || []).map((model) => (
+                        <Dropdown.Option key={model} value={model}>
+                          {model}
+                        </Dropdown.Option>
+                      ))}
                 </Dropdown>
 
                 {/* Responses API Toggle */}

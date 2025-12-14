@@ -19,6 +19,7 @@ import {
   BedrockIcon,
 } from "./icons";
 import ModelManager from "./components/ModelManager";
+import BedrockModelManager from "./components/BedrockModelManager";
 import Switch from "./components/Switch";
 
 // Acquire VS Code API once at module level (singleton)
@@ -69,8 +70,10 @@ function ConfigPanel() {
     anthropic: [],
     gemini: [],
     azure: [],
-    bedrock: [],
   });
+
+  // Bedrock models with display name → model ID mapping
+  const [bedrockModels, setBedrockModels] = useState([]);
 
   // Azure endpoint
   const [azureEndpoint, setAzureEndpoint] = useState("");
@@ -91,6 +94,10 @@ function ConfigPanel() {
       const message = event.data;
       if (message.type === "customModelsLoaded") {
         setCustomModels(message.models || {});
+      } else if (message.type === "bedrockModelsLoaded") {
+        setBedrockModels(message.models || []);
+      } else if (message.type === "bedrockModelsSaved") {
+        setBedrockModels(message.models || []);
       } else if (message.type === "providerKeysLoaded") {
         setKeyStatus(message.keyStatus || {});
       } else if (message.type === "settingsLoaded") {
@@ -102,6 +109,7 @@ function ConfigPanel() {
 
     // Request data on mount
     vscode?.postMessage({ type: "loadCustomModels" });
+    vscode?.postMessage({ type: "loadBedrockModels" });
     vscode?.postMessage({ type: "loadAllProviderKeys" });
     vscode?.postMessage({ type: "loadSettings" });
 
@@ -171,6 +179,15 @@ function ConfigPanel() {
     // Mark bedrock as having saved credentials
     setKeyStatus((prev) => ({ ...prev, bedrock: true }));
     setSaveStatus("Bedrock AWS credentials saved!");
+    setTimeout(() => setSaveStatus(""), 2000);
+  };
+
+  const handleSaveBedrockModels = () => {
+    vscode?.postMessage({
+      type: "saveBedrockModels",
+      models: bedrockModels,
+    });
+    setSaveStatus("Bedrock models saved!");
     setTimeout(() => setSaveStatus(""), 2000);
   };
 
@@ -374,15 +391,40 @@ function ConfigPanel() {
           {/* Bedrock AWS Credentials (only for Bedrock) */}
           {activeProvider === "bedrock" && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Globe size={14} className="text-orange-400" />
-                <label className="text-sm font-medium text-white/80">
-                  AWS Credentials
-                </label>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Globe size={14} className="text-orange-400" />
+                  <label className="text-sm font-medium text-white/80">
+                    AWS Credentials
+                  </label>
+                  {keyStatus.bedrock && (
+                    <span className="text-xs text-green-400 flex items-center gap-1 bg-green-500/10 px-2 py-0.5 rounded-full">
+                      <Check size={10} /> Configured
+                    </span>
+                  )}
+                </div>
                 {keyStatus.bedrock && (
-                  <span className="text-xs text-green-400 flex items-center gap-1 bg-green-500/10 px-2 py-0.5 rounded-full">
-                    <Check size={10} /> Configured
-                  </span>
+                  <button
+                    onClick={() => {
+                      // Delete AWS credentials
+                      vscode?.postMessage({
+                        type: "saveSettings",
+                        settings: {
+                          provider: "bedrock",
+                          awsAccessKey: "",
+                          awsSecretKey: "",
+                          awsRegion: "us-east-1",
+                        },
+                      });
+                      setKeyStatus((prev) => ({ ...prev, bedrock: false }));
+                      setSaveStatus("AWS credentials deleted");
+                      setTimeout(() => setSaveStatus(""), 2000);
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 hover:bg-red-500/10 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={12} />
+                    Delete Credentials
+                  </button>
                 )}
               </div>
               <p className="text-xs text-white/40 mb-3">
@@ -478,11 +520,16 @@ function ConfigPanel() {
               <div className="flex items-center gap-2">
                 <Box size={14} className="text-purple-400" />
                 <label className="text-sm font-medium text-white/80">
-                  {currentProvider?.label} Models
+                  {currentProvider?.label} Models{" "}
+                  {currentProvider?.label === "Bedrock" ? "(only Claude)" : ""}
                 </label>
               </div>
               <button
-                onClick={handleSaveModels}
+                onClick={
+                  activeProvider === "bedrock"
+                    ? handleSaveBedrockModels
+                    : handleSaveModels
+                }
                 disabled={isSaving}
                 className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 text-xs font-medium hover:bg-purple-500/30 transition-colors disabled:opacity-50"
               >
@@ -490,13 +537,21 @@ function ConfigPanel() {
               </button>
             </div>
 
-            <ModelManager
-              models={customModels[activeProvider] || []}
-              onChange={(models) =>
-                updateModelsForProvider(activeProvider, models)
-              }
-              placeholder={`Add ${currentProvider?.label} model name...`}
-            />
+            {activeProvider === "bedrock" ? (
+              <BedrockModelManager
+                models={bedrockModels}
+                onChange={setBedrockModels}
+                onSave={handleSaveBedrockModels}
+              />
+            ) : (
+              <ModelManager
+                models={customModels[activeProvider] || []}
+                onChange={(models) =>
+                  updateModelsForProvider(activeProvider, models)
+                }
+                placeholder={`Add ${currentProvider?.label} model name...`}
+              />
+            )}
           </div>
         </div>
 

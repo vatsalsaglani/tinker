@@ -72,6 +72,16 @@ API keys and AWS credentials are stored securely in VS Code's encrypted secret s
 
 See [full changelog](#release-notes) for all versions.
 
+### 0.0.5
+
+- 🗺️ **Bedrock Model Mapping** - Configure friendly display names for AWS Bedrock models (e.g., "Sonnet 4.5") that map to ARNs or Inference Profile IDs
+- 🎨 **BedrockModelManager Component** - Dedicated UI for managing Bedrock model mappings with help text for AWS identifier formats
+- 🔧 **Model Preservation Fix** - Fixed bug where saving AWS credentials would overwrite the selected model
+- 🔄 **State Synchronization** - Fixed ConfigPanel and Sidebar staying in sync when models are updated
+- 🗑️ **AWS Credentials Delete** - Added delete button for Bedrock AWS credentials
+- 📊 **Dropdown Enhancement** - Added `renderValue` prop for custom display value rendering
+- 📝 **Config Schema** - New `bedrockModels` configuration for model display name → model ID mapping
+
 ### 0.0.4
 
 - 🔧 **VS Code Fork Compatibility Fix** - Improved secret storage with fallback to globalState for better compatibility with Cursor, Kiro, and other VS Code forks

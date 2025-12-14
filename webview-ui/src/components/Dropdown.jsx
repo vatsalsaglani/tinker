@@ -110,6 +110,7 @@ function Dropdown({
   showArrow = true,
   icon: TriggerIcon,
   iconPosition = "left",
+  renderValue, // New prop: custom render function for display value
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -142,12 +143,17 @@ function Dropdown({
 
   // Get currently selected option's label
   const getSelectedLabel = useCallback(() => {
+    // Use custom renderValue if provided
+    if (renderValue && value) {
+      return renderValue(value);
+    }
+
     const options = React.Children.toArray(children);
     const selected = options.find(
       (child) => React.isValidElement(child) && child.props.value === value
     );
     return selected ? selected.props.children : placeholder;
-  }, [children, value, placeholder]);
+  }, [children, value, placeholder, renderValue]);
 
   // Get selected option's icon
   const getSelectedIcon = useCallback(() => {

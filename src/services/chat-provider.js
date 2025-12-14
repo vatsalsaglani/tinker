@@ -219,6 +219,12 @@ class ChatViewProvider {
         case "loadCustomModels":
           await this.loadCustomModels();
           break;
+        case "saveBedrockModels":
+          await this.saveBedrockModels(data.models);
+          break;
+        case "loadBedrockModels":
+          await this.loadBedrockModels();
+          break;
         case "saveProviderApiKey":
           await this.saveProviderApiKey(data.provider, data.apiKey);
           break;
@@ -1237,11 +1243,16 @@ class ChatViewProvider {
       settings.provider,
       vscode.ConfigurationTarget.Global
     );
-    await config.update(
-      "model",
-      settings.model,
-      vscode.ConfigurationTarget.Global
-    );
+
+    // Only update model if explicitly provided (don't overwrite with undefined)
+    if (settings.model !== undefined) {
+      await config.update(
+        "model",
+        settings.model,
+        vscode.ConfigurationTarget.Global
+      );
+    }
+
     await config.update(
       "useResponsesAPI",
       settings.useResponsesAPI || false,
@@ -1309,11 +1320,17 @@ class ChatViewProvider {
       }
     }
 
+    // Get the model to use - either from settings or from stored config
+    let modelToUse = settings.model;
+    if (modelToUse === undefined) {
+      modelToUse = config.get("model", "");
+    }
+
     // Initialize provider
     try {
       this.llmConnector.initProvider(settings.provider, {
         apiKey: apiKeyToUse,
-        model: settings.model,
+        model: modelToUse,
         baseURL: baseURL,
         useResponsesAPI: settings.useResponsesAPI,
         // Bedrock-specific
@@ -1322,6 +1339,9 @@ class ChatViewProvider {
         awsRegion: awsRegion,
       });
 
+      this.log(
+        `Provider ${settings.provider} initialized with model: ${modelToUse}`
+      );
       vscode.window.showInformationMessage(`${settings.provider} configured`);
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to initialize: ${error.message}`);
@@ -1430,15 +1450,66 @@ class ChatViewProvider {
       anthropic: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"],
       gemini: ["gemini-2.0-flash-exp", "gemini-1.5-pro"],
       azure: ["gpt-4", "gpt-35-turbo"],
-      bedrock: [
-        "anthropic.claude-sonnet-4-20250514-v1:0",
-        "anthropic.claude-3-5-sonnet-20241022-v2:0",
-      ],
     };
     const models = config.get("customModels", defaultModels);
 
     this._view?.webview.postMessage({
       type: "customModelsLoaded",
+      models,
+    });
+
+    // Also load Bedrock models separately
+    await this.loadBedrockModels();
+  }
+
+  /**
+   * Save Bedrock models (with display name → model ID mapping)
+   */
+  async saveBedrockModels(models) {
+    const config = vscode.workspace.getConfiguration("tinkerAssistant");
+    await config.update(
+      "bedrockModels",
+      models,
+      vscode.ConfigurationTarget.Global
+    );
+
+    this._view?.webview.postMessage({
+      type: "bedrockModelsSaved",
+      models,
+    });
+
+    // Also send to config panel if open
+    this._configPanel?.webview.postMessage({
+      type: "bedrockModelsSaved",
+      models,
+    });
+  }
+
+  /**
+   * Load Bedrock models (with display name → model ID mapping)
+   */
+  async loadBedrockModels() {
+    const config = vscode.workspace.getConfiguration("tinkerAssistant");
+    const defaultModels = [
+      {
+        displayName: "Claude Sonnet 4",
+        modelId: "anthropic.claude-sonnet-4-20250514-v1:0",
+      },
+      {
+        displayName: "Claude 3.5 Sonnet",
+        modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      },
+    ];
+    const models = config.get("bedrockModels", defaultModels);
+
+    this._view?.webview.postMessage({
+      type: "bedrockModelsLoaded",
+      models,
+    });
+
+    // Also send to config panel if open
+    this._configPanel?.webview.postMessage({
+      type: "bedrockModelsLoaded",
       models,
     });
   }
@@ -1848,6 +1919,12 @@ class ChatViewProvider {
           break;
         case "loadCustomModels":
           await this.loadCustomModelsToPanel();
+          break;
+        case "saveBedrockModels":
+          await this.saveBedrockModels(data.models);
+          break;
+        case "loadBedrockModels":
+          await this.loadBedrockModels();
           break;
         case "saveProviderApiKey":
           await this.saveProviderApiKey(data.provider, data.apiKey);

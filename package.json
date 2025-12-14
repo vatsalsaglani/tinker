@@ -2,7 +2,7 @@
   "name": "tinker",
   "displayName": "Tinker",
   "description": "Open-source Coding Agent - BYOK",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "author": "vatsalsaglani",
   "publisher": "vatsalsaglani",
   "icon": "media/tinker-logo-v2.png",
@@ -162,13 +162,40 @@
             "azure": [
               "gpt-4",
               "gpt-35-turbo"
-            ],
-            "bedrock": [
-              "anthropic.claude-sonnet-4-20250514-v1:0",
-              "anthropic.claude-3-5-sonnet-20241022-v2:0"
             ]
           },
-          "description": "Custom models per provider"
+          "description": "Custom models per provider (except Bedrock - use bedrockModels instead)"
+        },
+        "tinkerAssistant.bedrockModels": {
+          "type": "array",
+          "default": [
+            {
+              "displayName": "Claude Sonnet 4",
+              "modelId": "anthropic.claude-sonnet-4-20250514-v1:0"
+            },
+            {
+              "displayName": "Claude 3.5 Sonnet",
+              "modelId": "anthropic.claude-3-5-sonnet-20241022-v2:0"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "displayName": {
+                "type": "string",
+                "description": "Friendly name to display in the UI"
+              },
+              "modelId": {
+                "type": "string",
+                "description": "AWS Bedrock model ID, ARN, or Inference Profile ID"
+              }
+            },
+            "required": [
+              "displayName",
+              "modelId"
+            ]
+          },
+          "description": "Bedrock models with display names mapped to model IDs, ARNs, or Inference Profiles"
         }
       }
     }
