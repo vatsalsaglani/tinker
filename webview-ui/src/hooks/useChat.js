@@ -9,6 +9,7 @@ export function useChat() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState(null);
+  const [contextStatus, setContextStatus] = useState(null); // Context window status
 
   // Use ref to track tool calls that belong to current assistant turn
   const currentToolCallsRef = useRef([]);
@@ -41,6 +42,7 @@ export function useChat() {
         codeBlocks: msg.codeBlocks || [],
         contextChips: msg.contextChips || null, // Include context chips for display
         toolCalls: [],
+        usage: msg.usage || null, // Include token usage if available
       };
     });
   };
@@ -95,12 +97,18 @@ export function useChat() {
               content: finalContent,
               codeBlocks: message.blocks || [],
               toolCalls: finalToolCalls,
+              usage: message.usage || null, // Token usage data
             },
           ]);
         }
         setCurrentAssistantMessage(null);
         currentToolCallsRef.current = [];
         setIsGenerating(false);
+
+        // Update context status
+        if (message.contextStatus) {
+          setContextStatus(message.contextStatus);
+        }
         break;
 
       case "toolCall":
@@ -203,6 +211,7 @@ export function useChat() {
       : messages,
     isGenerating,
     isThinking,
+    contextStatus,
     sendMessage,
     stopGeneration,
   };

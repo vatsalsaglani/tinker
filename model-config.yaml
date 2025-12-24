@@ -1,0 +1,1573 @@
+providers:
+  openai:
+    models:
+      gpt-4o:
+        context_length: 128000
+        max_output_tokens: 16384
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 2.50
+              cached_input_per_1m: 1.25
+              output_per_1m: 10.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 1.25
+              cached_input_per_1m: null
+              output_per_1m: 5.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 4.25
+              cached_input_per_1m: 2.125
+              output_per_1m: 17.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens (if any) are billed as output tokens."
+
+      gpt-4o-mini:
+        context_length: 128000
+        max_output_tokens: 16384
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.15
+              cached_input_per_1m: 0.075
+              output_per_1m: 0.60
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.075
+              cached_input_per_1m: null
+              output_per_1m: 0.30
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 0.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 1.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens (if any) are billed as output tokens."
+
+      gpt-4.1:
+        context_length: 1048576
+        max_output_tokens: 32768
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 2.00
+              cached_input_per_1m: 0.50
+              output_per_1m: 8.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 1.00
+              cached_input_per_1m: null
+              output_per_1m: 4.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 3.50
+              cached_input_per_1m: 0.875
+              output_per_1m: 14.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens (if any) are billed as output tokens."
+
+      gpt-4.1-mini:
+        context_length: 1048576
+        max_output_tokens: 32768
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.40
+              cached_input_per_1m: 0.10
+              output_per_1m: 1.60
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.20
+              cached_input_per_1m: null
+              output_per_1m: 0.80
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 0.70
+              cached_input_per_1m: 0.175
+              output_per_1m: 2.80
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens (if any) are billed as output tokens."
+
+      gpt-4.1-nano:
+        context_length: 1048576
+        max_output_tokens: 32768
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.10
+              cached_input_per_1m: 0.025
+              output_per_1m: 0.40
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.05
+              cached_input_per_1m: null
+              output_per_1m: 0.20
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 0.20
+              cached_input_per_1m: 0.05
+              output_per_1m: 0.80
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens (if any) are billed as output tokens."
+
+      gpt-5:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.625
+              cached_input_per_1m: 0.0625
+              output_per_1m: 5.00
+              reasoning_per_1m: 5.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: 0.625
+              cached_input_per_1m: 0.0625
+              output_per_1m: 5.00
+              reasoning_per_1m: 5.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 2.50
+              cached_input_per_1m: 0.25
+              output_per_1m: 20.00
+              reasoning_per_1m: 20.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens are billed as output tokens."
+
+      gpt-5.1:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.625
+              cached_input_per_1m: 0.0625
+              output_per_1m: 5.00
+              reasoning_per_1m: 5.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: 0.625
+              cached_input_per_1m: 0.0625
+              output_per_1m: 5.00
+              reasoning_per_1m: 5.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 2.50
+              cached_input_per_1m: 0.25
+              output_per_1m: 20.00
+              reasoning_per_1m: 20.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens are billed as output tokens."
+
+      gpt-5.2:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.75
+              cached_input_per_1m: 0.175
+              output_per_1m: 14.00
+              reasoning_per_1m: 14.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.875
+              cached_input_per_1m: 0.0875
+              output_per_1m: 7.00
+              reasoning_per_1m: 7.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: 0.875
+              cached_input_per_1m: 0.0875
+              output_per_1m: 7.00
+              reasoning_per_1m: 7.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 3.50
+              cached_input_per_1m: 0.35
+              output_per_1m: 28.00
+              reasoning_per_1m: 28.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens are billed as output tokens."
+
+      gpt-5-mini:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.25
+              cached_input_per_1m: 0.025
+              output_per_1m: 2.00
+              reasoning_per_1m: 2.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.125
+              cached_input_per_1m: 0.0125
+              output_per_1m: 1.00
+              reasoning_per_1m: 1.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: 0.125
+              cached_input_per_1m: 0.0125
+              output_per_1m: 1.00
+              reasoning_per_1m: 1.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 0.45
+              cached_input_per_1m: 0.045
+              output_per_1m: 3.60
+              reasoning_per_1m: 3.60
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens are billed as output tokens."
+
+      gpt-5-nano:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.05
+              cached_input_per_1m: 0.005
+              output_per_1m: 0.40
+              reasoning_per_1m: 0.40
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.025
+              cached_input_per_1m: 0.0025
+              output_per_1m: 0.20
+              reasoning_per_1m: 0.20
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: 0.025
+              cached_input_per_1m: 0.0025
+              output_per_1m: 0.20
+              reasoning_per_1m: 0.20
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens are billed as output tokens."
+
+      gpt-5-pro:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 15.00
+              cached_input_per_1m: null
+              output_per_1m: 120.00
+              reasoning_per_1m: 120.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 7.50
+              cached_input_per_1m: null
+              output_per_1m: 60.00
+              reasoning_per_1m: 60.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Displayed as input/output pair in pricing table; reasoning billed as output."
+
+      gpt-5.2-pro:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 21.00
+              cached_input_per_1m: null
+              output_per_1m: 168.00
+              reasoning_per_1m: 168.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 10.50
+              cached_input_per_1m: null
+              output_per_1m: 84.00
+              reasoning_per_1m: 84.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Displayed as input/output pair in pricing table; reasoning billed as output."
+
+      gpt-5-chat-latest:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Alias pricing listed under Standard tier."
+
+      gpt-5.1-chat-latest:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Alias pricing listed under Standard tier."
+
+      gpt-5.2-chat-latest:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.75
+              cached_input_per_1m: 0.175
+              output_per_1m: 14.00
+              reasoning_per_1m: 14.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Alias pricing listed under Standard tier."
+
+      gpt-5-codex:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 2.50
+              cached_input_per_1m: 0.25
+              output_per_1m: 20.00
+              reasoning_per_1m: 20.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing listed for Codex in Standard and Priority tables."
+
+      gpt-5.1-codex:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 2.50
+              cached_input_per_1m: 0.25
+              output_per_1m: 20.00
+              reasoning_per_1m: 20.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing listed for Codex in Standard and Priority tables."
+
+      gpt-5.1-codex-max:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.25
+              cached_input_per_1m: 0.125
+              output_per_1m: 10.00
+              reasoning_per_1m: 10.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 2.50
+              cached_input_per_1m: 0.25
+              output_per_1m: 20.00
+              reasoning_per_1m: 20.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing listed for Codex in Standard and Priority tables."
+
+      gpt-5.1-codex-mini:
+        context_length: 400000
+        max_output_tokens: 128000
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.25
+              cached_input_per_1m: 0.025
+              output_per_1m: 2.00
+              reasoning_per_1m: 2.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Listed under Standard tier in pricing table."
+
+      codex-mini-latest:
+        context_length: null
+        max_output_tokens: null
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.50
+              cached_input_per_1m: 0.375
+              output_per_1m: 6.00
+              reasoning_per_1m: 6.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Context and output limits not present in retrieved pricing excerpt."
+
+      o1:
+        context_length: 200000
+        max_output_tokens: 100000
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 15.00
+              cached_input_per_1m: 7.50
+              output_per_1m: 60.00
+              reasoning_per_1m: 60.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 7.50
+              cached_input_per_1m: null
+              output_per_1m: 30.00
+              reasoning_per_1m: 30.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens billed as output tokens."
+
+      o4-mini:
+        context_length: 200000
+        max_output_tokens: 100000
+        supports_vision: false
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.10
+              cached_input_per_1m: 0.275
+              output_per_1m: 4.40
+              reasoning_per_1m: 4.40
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.55
+              cached_input_per_1m: null
+              output_per_1m: 2.20
+              reasoning_per_1m: 2.20
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: 0.55
+              cached_input_per_1m: 0.138
+              output_per_1m: 2.20
+              reasoning_per_1m: 2.20
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: 2.00
+              cached_input_per_1m: 0.50
+              output_per_1m: 8.00
+              reasoning_per_1m: 8.00
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Reasoning tokens billed as output tokens."
+
+  anthropic:
+    models:
+      claude-opus-4-5:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 5.00
+              cached_input_per_1m: 0.50
+              output_per_1m: 25.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 6.25
+              cache_write_1h_per_1m: 10.00
+            batch:
+              input_per_1m: 2.50
+              cached_input_per_1m: 0.25
+              output_per_1m: 12.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.125
+              cache_write_1h_per_1m: 5.00
+            flex:
+              input_per_1m: 5.00
+              cached_input_per_1m: 0.50
+              output_per_1m: 25.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 6.25
+              cache_write_1h_per_1m: 10.00
+            priority:
+              input_per_1m: 5.00
+              cached_input_per_1m: 0.50
+              output_per_1m: 25.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 6.25
+              cache_write_1h_per_1m: 10.00
+          notes: "Anthropic prompt caching has explicit write (5m/1h) and read (cache hits) rates."
+
+      claude-opus-4-1:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 15.00
+              cached_input_per_1m: 1.50
+              output_per_1m: 75.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 18.75
+              cache_write_1h_per_1m: 30.00
+            batch:
+              input_per_1m: 7.50
+              cached_input_per_1m: 0.75
+              output_per_1m: 37.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 9.375
+              cache_write_1h_per_1m: 15.00
+            flex:
+              input_per_1m: 15.00
+              cached_input_per_1m: 1.50
+              output_per_1m: 75.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 18.75
+              cache_write_1h_per_1m: 30.00
+            priority:
+              input_per_1m: 15.00
+              cached_input_per_1m: 1.50
+              output_per_1m: 75.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 18.75
+              cache_write_1h_per_1m: 30.00
+          notes: "Anthropic prompt caching has explicit write (5m/1h) and read (cache hits) rates."
+
+      claude-opus-4:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 15.00
+              cached_input_per_1m: 1.50
+              output_per_1m: 75.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 18.75
+              cache_write_1h_per_1m: 30.00
+            batch:
+              input_per_1m: 7.50
+              cached_input_per_1m: 0.75
+              output_per_1m: 37.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 9.375
+              cache_write_1h_per_1m: 15.00
+            flex:
+              input_per_1m: 15.00
+              cached_input_per_1m: 1.50
+              output_per_1m: 75.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 18.75
+              cache_write_1h_per_1m: 30.00
+            priority:
+              input_per_1m: 15.00
+              cached_input_per_1m: 1.50
+              output_per_1m: 75.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 18.75
+              cache_write_1h_per_1m: 30.00
+          notes: "Anthropic prompt caching has explicit write (5m/1h) and read (cache hits) rates."
+
+      claude-sonnet-4-5:
+        context_length: 200000
+        context_length_options: [200000, 1000000]
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+            batch:
+              input_per_1m: 1.50
+              cached_input_per_1m: 0.15
+              output_per_1m: 7.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.875
+              cache_write_1h_per_1m: 3.00
+            flex:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+            priority:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+          additional_tiers:
+            long_context_over_200k_input:
+              input_per_1m: 6.00
+              output_per_1m: 22.50
+          notes: "Long-context premium applies when 1M context is enabled and input exceeds 200K."
+
+      claude-sonnet-4:
+        context_length: 200000
+        context_length_options: [200000, 1000000]
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+            batch:
+              input_per_1m: 1.50
+              cached_input_per_1m: 0.15
+              output_per_1m: 7.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.875
+              cache_write_1h_per_1m: 3.00
+            flex:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+            priority:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+          additional_tiers:
+            long_context_over_200k_input:
+              input_per_1m: 6.00
+              output_per_1m: 22.50
+          notes: "Long-context premium applies when 1M context is enabled and input exceeds 200K."
+
+      claude-3-7-sonnet:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+            batch:
+              input_per_1m: 1.50
+              cached_input_per_1m: 0.15
+              output_per_1m: 7.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.875
+              cache_write_1h_per_1m: 3.00
+            flex:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+            priority:
+              input_per_1m: 3.00
+              cached_input_per_1m: 0.30
+              output_per_1m: 15.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 3.75
+              cache_write_1h_per_1m: 6.00
+          notes: "Deprecated model per pricing table."
+
+      claude-3-5-sonnet:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Not present in the retrieved Claude pricing table excerpt."
+
+      claude-3-5-haiku:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.80
+              cached_input_per_1m: 0.08
+              output_per_1m: 4.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.00
+              cache_write_1h_per_1m: 1.60
+            batch:
+              input_per_1m: 0.40
+              cached_input_per_1m: 0.04
+              output_per_1m: 2.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 0.50
+              cache_write_1h_per_1m: 0.80
+            flex:
+              input_per_1m: 0.80
+              cached_input_per_1m: 0.08
+              output_per_1m: 4.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.00
+              cache_write_1h_per_1m: 1.60
+            priority:
+              input_per_1m: 0.80
+              cached_input_per_1m: 0.08
+              output_per_1m: 4.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.00
+              cache_write_1h_per_1m: 1.60
+          notes: "Anthropic prompt caching has explicit write (5m/1h) and read (cache hits) rates."
+
+      claude-haiku-4-5:
+        context_length: 200000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 1.00
+              cached_input_per_1m: 0.10
+              output_per_1m: 5.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.25
+              cache_write_1h_per_1m: 2.00
+            batch:
+              input_per_1m: 0.50
+              cached_input_per_1m: 0.05
+              output_per_1m: 2.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 0.625
+              cache_write_1h_per_1m: 1.00
+            flex:
+              input_per_1m: 1.00
+              cached_input_per_1m: 0.10
+              output_per_1m: 5.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.25
+              cache_write_1h_per_1m: 2.00
+            priority:
+              input_per_1m: 1.00
+              cached_input_per_1m: 0.10
+              output_per_1m: 5.00
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: 1.25
+              cache_write_1h_per_1m: 2.00
+          notes: "Anthropic prompt caching has explicit write (5m/1h) and read (cache hits) rates."
+
+  gemini:
+    models:
+      gemini-1.5-pro:
+        context_length: 2000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing not present in retrieved excerpt; context cited from Gemini research documentation."
+
+      gemini-1.5-flash:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing not present in retrieved excerpt; context cited from Gemini research documentation."
+
+      gemini-2.0-flash:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Model exists in docs; pricing not present in retrieved excerpt."
+
+      gemini-2.0-flash-thinking:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Thinking mode referenced in changelog; pricing not present in retrieved excerpt."
+
+      gemini-2.0-flash-lite:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing not present in retrieved excerpt."
+
+      gemini-2.5-flash:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.30
+              cached_input_per_1m: 0.03
+              output_per_1m: 2.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.15
+              cached_input_per_1m: 0.03
+              output_per_1m: 1.25
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Text/image/video rates used; output price includes thinking tokens."
+
+      gemini-2.5-flash-preview-09-2025:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.30
+              cached_input_per_1m: 0.03
+              output_per_1m: 2.50
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.15
+              cached_input_per_1m: 0.03
+              output_per_1m: 1.25
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing shown for preview model; output price includes thinking tokens."
+
+      gemini-2.5-flash-lite:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.10
+              cached_input_per_1m: 0.01
+              output_per_1m: 0.40
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: 0.05
+              cached_input_per_1m: 0.01
+              output_per_1m: 0.20
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Text/image/video rates used; output price includes thinking tokens."
+
+      gemini-2.5-flash-lite-preview-09-2025:
+        context_length: 1000000
+        max_output_tokens: 8192
+        supports_vision: true
+        supports_thinking: false
+        pricing:
+          currency: USD
+          tiers:
+            standard:
+              input_per_1m: 0.10
+              cached_input_per_1m: 0.01
+              output_per_1m: 0.40
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            batch:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            flex:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+            priority:
+              input_per_1m: null
+              cached_input_per_1m: null
+              output_per_1m: null
+              reasoning_per_1m: null
+              cache_write_5m_per_1m: null
+              cache_write_1h_per_1m: null
+          notes: "Pricing shown for preview model; output price includes thinking tokens."
+      gemini-3-flash-preview:
+        context_length: 1000000
+        max_output_tokens: 65536
+        supports_vision: true
+        supports_thinking: true
+        pricing:
+          currency: USD
+        tiers:
+          standard:
+            input_per_1m: 0.50
+            cached_input_per_1m: 0.05
+            output_per_1m: 3.00
+            reasoning_per_1m: null
+            cache_write_5m_per_1m: 0.0833
+            cache_write_1h_per_1m: 1.00
+          batch:
+            input_per_1m: 0.25
+            cached_input_per_1m: 0.05
+            output_per_1m: 1.50
+            reasoning_per_1m: null
+            cache_write_5m_per_1m: 0.0833
+            cache_write_1h_per_1m: 1.00
+          flex:
+            input_per_1m: null
+            cached_input_per_1m: null
+            output_per_1m: null
+            reasoning_per_1m: null
+            cache_write_5m_per_1m: null
+            cache_write_1h_per_1m: null
+          priority:
+            input_per_1m: null
+            cached_input_per_1m: null
+            output_per_1m: null
+            reasoning_per_1m: null
+            cache_write_5m_per_1m: null
+            cache_write_1h_per_1m: null
+        notes: "Preview model. Context window is 1M in / 64k out. Output price includes thinking tokens. Audio input is $1.00/1M (standard) and $0.50/1M (batch). Cached audio is $0.10/1M. Cache storage is $1.00 per 1M tokens per hour (5m computed as $0.0833). Batch context caching pricing is listed as 'same as standard' (batch caching not yet implemented)."

@@ -222,11 +222,31 @@ class BedrockProvider extends BaseProvider {
       let fullResponse = "";
       let currentToolUse = null;
       let finishReason = "stop";
+      let usage = {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      };
 
       for await (const chunk of stream) {
-        // Track stop reason
-        if (chunk.type === "message_delta" && chunk.delta?.stop_reason) {
-          finishReason = chunk.delta.stop_reason;
+        // Capture usage from message_start event
+        if (chunk.type === "message_start" && chunk.message?.usage) {
+          usage.input_tokens = chunk.message.usage.input_tokens || 0;
+          usage.cache_creation_input_tokens =
+            chunk.message.usage.cache_creation_input_tokens || 0;
+          usage.cache_read_input_tokens =
+            chunk.message.usage.cache_read_input_tokens || 0;
+        }
+
+        // Track stop reason and output usage from message_delta
+        if (chunk.type === "message_delta") {
+          if (chunk.delta?.stop_reason) {
+            finishReason = chunk.delta.stop_reason;
+          }
+          if (chunk.usage) {
+            usage.output_tokens = chunk.usage.output_tokens || 0;
+          }
         }
 
         // Handle text content
@@ -294,6 +314,7 @@ class BedrockProvider extends BaseProvider {
         content: fullResponse,
         finishReason: normalizedFinishReason,
         wasTruncated,
+        usage,
       };
     } catch (error) {
       console.error("Bedrock Streaming Error:", error);

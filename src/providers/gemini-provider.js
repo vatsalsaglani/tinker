@@ -121,18 +121,53 @@ class GeminiProvider extends BaseProvider {
     });
 
     try {
+      console.log(
+        `[Gemini] Creating stream with args:`,
+        JSON.stringify({
+          model: args.model,
+          messageCount: args.messages.length,
+          maxTokens: args.max_tokens,
+          hasTools: !!args.tools,
+        })
+      );
+
       const stream = await this.client.chat.completions.create(args);
 
       let fullResponse = "";
       let currentToolCall = null;
       let finishReason = "stop";
+      let usage = null;
+      let chunkCount = 0;
 
       for await (const chunk of stream) {
+        chunkCount++;
+
+        // Log first few chunks and every 10th chunk for debugging
+        if (chunkCount <= 3 || chunkCount % 10 === 0) {
+          console.log(
+            `[Gemini] Chunk ${chunkCount}:`,
+            JSON.stringify({
+              hasChoices: !!chunk.choices?.length,
+              hasDelta: !!chunk.choices?.[0]?.delta,
+              hasContent: !!chunk.choices?.[0]?.delta?.content,
+              hasToolCalls: !!chunk.choices?.[0]?.delta?.tool_calls,
+              finishReason: chunk.choices?.[0]?.finish_reason,
+            })
+          );
+        }
+
+        // Capture usage from final chunk
+        if (chunk.usage) {
+          usage = chunk.usage;
+          console.log(`[Gemini] Usage received:`, JSON.stringify(chunk.usage));
+        }
+
         const delta = chunk.choices[0]?.delta;
         const chunkFinishReason = chunk.choices[0]?.finish_reason;
 
         if (chunkFinishReason) {
           finishReason = chunkFinishReason;
+          console.log(`[Gemini] Finish reason: ${finishReason}`);
         }
 
         // Handle text content
@@ -166,6 +201,9 @@ class GeminiProvider extends BaseProvider {
                   arguments: toolCall.function?.arguments || "",
                 },
               };
+              console.log(
+                `[Gemini] Tool call started: ${currentToolCall.function.name}`
+              );
             } else {
               if (toolCall.function?.arguments) {
                 currentToolCall.function.arguments +=
@@ -175,27 +213,48 @@ class GeminiProvider extends BaseProvider {
           }
         }
 
-        // Process tool call on finish
-        if (
-          chunkFinishReason === "tool_calls" &&
-          currentToolCall &&
-          onToolCall
-        ) {
+        // Process tool call on finish - Gemini may use "stop" instead of "tool_calls"
+        // Execute if we have a pending tool call and stream is ending
+        if (chunkFinishReason && currentToolCall && onToolCall) {
           try {
-            const args = JSON.parse(currentToolCall.function.arguments);
+            const args = JSON.parse(currentToolCall.function.arguments || "{}");
             console.log(
-              `[Gemini] Executing tool: ${currentToolCall.function.name}`
+              `[Gemini] Executing tool (finish: ${chunkFinishReason}): ${currentToolCall.function.name}`
             );
             await onToolCall(
               currentToolCall.function.name,
               args,
               currentToolCall.id
             );
+            // Mark that we executed a tool so we can continue the loop
+            finishReason = "tool_calls";
           } catch (e) {
             console.error("[Gemini] Failed to parse tool arguments:", e);
+            console.error(
+              "[Gemini] Raw arguments:",
+              currentToolCall.function.arguments
+            );
           }
           currentToolCall = null;
         }
+      }
+
+      console.log(
+        `[Gemini] Stream complete - chunks: ${chunkCount}, responseLength: ${fullResponse.length}, finishReason: ${finishReason}`
+      );
+
+      // If we got no response and no tool calls, log a warning
+      if (
+        fullResponse.length === 0 &&
+        !currentToolCall &&
+        finishReason === "stop"
+      ) {
+        console.warn(
+          `[Gemini] WARNING: Empty response received! Model may not support streaming or there was an issue.`
+        );
+        console.warn(
+          `[Gemini] Try checking if the model "${model}" is correct and supports the OpenAI compatibility layer.`
+        );
       }
 
       const wasTruncated = finishReason === "length";
@@ -205,6 +264,7 @@ class GeminiProvider extends BaseProvider {
         finishReason,
         wasTruncated,
         responseLength: fullResponse.length,
+        chunkCount,
         timestamp: new Date().toISOString(),
       });
 
@@ -213,11 +273,19 @@ class GeminiProvider extends BaseProvider {
         content: fullResponse,
         finishReason,
         wasTruncated,
+        usage,
       };
     } catch (error) {
       console.error("[Gemini] Streaming Error:", error);
+      console.error("[Gemini] Error details:", {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        type: error.type,
+      });
       this.writeDebugLog("stream_error", {
         error: error.message,
+        status: error.status,
         timestamp: new Date().toISOString(),
       });
       throw new Error(`Gemini Streaming Error: ${error.message}`);

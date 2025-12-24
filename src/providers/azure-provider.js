@@ -344,6 +344,7 @@ class AzureProvider extends BaseProvider {
       let buffer = "";
       let currentToolCalls = new Map();
       let finishReason = null;
+      let usage = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -362,13 +363,17 @@ class AzureProvider extends BaseProvider {
               const parsed = JSON.parse(data);
               const eventType = parsed.type;
 
-              // Track finish reason
+              // Track finish reason and usage
               if (
                 eventType === "response.done" ||
                 eventType === "response.completed"
               ) {
                 finishReason =
                   parsed.response?.status || parsed.status || "stop";
+                // Capture usage from response
+                if (parsed.response?.usage) {
+                  usage = parsed.response.usage;
+                }
                 if (parsed.response?.output) {
                   for (const item of parsed.response.output) {
                     if (
@@ -449,6 +454,7 @@ class AzureProvider extends BaseProvider {
         content: fullResponse,
         finishReason,
         wasTruncated,
+        usage,
       };
     } catch (error) {
       console.error("[Azure] Responses API Streaming Error:", error);
@@ -472,6 +478,7 @@ class AzureProvider extends BaseProvider {
       model,
       messages,
       stream: true,
+      stream_options: { include_usage: true },
     };
 
     if (this.isGpt5Model(model)) {
@@ -500,8 +507,14 @@ class AzureProvider extends BaseProvider {
       let fullResponse = "";
       let currentToolCall = null;
       let finishReason = "stop";
+      let usage = null;
 
       for await (const chunk of stream) {
+        // Capture usage from final chunk
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+
         const delta = chunk.choices[0]?.delta;
         const chunkFinishReason = chunk.choices[0]?.finish_reason;
 
@@ -582,6 +595,7 @@ class AzureProvider extends BaseProvider {
         content: fullResponse,
         finishReason,
         wasTruncated,
+        usage,
       };
     } catch (error) {
       console.error("Azure OpenAI Streaming Error:", error);

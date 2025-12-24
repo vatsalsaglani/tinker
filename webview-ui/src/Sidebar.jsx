@@ -9,6 +9,7 @@ import ConversationPopup from "./components/ConversationPopup";
 import ChipInput from "./components/ChipInput";
 import ImageAttachments from "./components/ImageAttachments";
 import Dropdown from "./components/Dropdown";
+import ContextGauge from "./components/ContextGauge";
 import { useVSCodeMessage } from "./hooks/useVSCodeMessage";
 import { useChat } from "./hooks/useChat";
 import { useAutocomplete } from "./hooks/useAutocomplete";
@@ -20,6 +21,7 @@ import {
   Loader2,
   Square,
   MessageSquare,
+  ArrowDown,
 } from "lucide-react";
 import {
   OpenAIIcon,
@@ -37,7 +39,16 @@ function Sidebar() {
   const [selectedModel, setSelectedModel] = useState("");
   const [useResponsesAPI, setUseResponsesAPI] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Smart scroll state
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+
+  // Message windowing - only render last N messages for performance
+  const VISIBLE_MESSAGE_COUNT = 5;
+  const [visibleStartIndex, setVisibleStartIndex] = useState(0);
 
   // Custom models per provider (for non-Bedrock providers)
   const [customModels, setCustomModels] = useState({
@@ -59,8 +70,14 @@ function Sidebar() {
     },
   ]);
 
-  const { messages, isGenerating, isThinking, sendMessage, stopGeneration } =
-    useChat();
+  const {
+    messages,
+    isGenerating,
+    isThinking,
+    contextStatus,
+    sendMessage,
+    stopGeneration,
+  } = useChat();
 
   const {
     contextChips,
@@ -162,10 +179,48 @@ function Sidebar() {
     });
   };
 
-  // Auto-scroll to bottom
+  // Smart auto-scroll - only scroll if user hasn't scrolled up
   useEffect(() => {
+    if (autoScrollEnabled && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, autoScrollEnabled]);
+
+  // Handle scroll to detect if user scrolled up
+  const handleMessagesScroll = (e) => {
+    const container = e.target;
+    const isAtBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      50;
+
+    if (isAtBottom) {
+      setIsUserScrolledUp(false);
+      setAutoScrollEnabled(true);
+    } else {
+      setIsUserScrolledUp(true);
+      setAutoScrollEnabled(false);
+    }
+  };
+
+  // Scroll to bottom and resume auto-scroll
+  const scrollToBottom = () => {
+    setAutoScrollEnabled(true);
+    setIsUserScrolledUp(false);
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  };
+
+  // Calculate visible messages
+  const totalMessages = messages.length;
+  // visibleStartIndex tracks how many extra messages beyond the default window to show
+  const messagesToShow = VISIBLE_MESSAGE_COUNT + visibleStartIndex;
+  const effectiveStartIndex = Math.max(0, totalMessages - messagesToShow);
+  const visibleMessages = messages.slice(effectiveStartIndex);
+  const hasMoreMessages = effectiveStartIndex > 0;
+
+  // Load more messages when clicking button
+  const loadMoreMessages = () => {
+    setVisibleStartIndex((prev) => prev + VISIBLE_MESSAGE_COUNT);
+  };
 
   const handleSend = () => {
     if (
@@ -175,6 +230,9 @@ function Sidebar() {
     )
       return;
     if (isGenerating) return;
+
+    // Reset visible window to show latest messages
+    setVisibleStartIndex(0);
 
     sendMessage(inputValue, contextChips, attachedImages);
     setInputValue("");
@@ -384,21 +442,58 @@ function Sidebar() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {messages.map((msg, idx) => (
-          <ChatMessage
-            key={idx}
-            message={msg}
-            appliedBlocks={appliedBlocks}
-            isLatest={idx === messages.length - 1}
-            isGenerating={
-              isThinking &&
-              idx === messages.length - 1 &&
-              msg.role === "assistant"
-            }
-          />
-        ))}
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 relative"
+        onScroll={handleMessagesScroll}
+      >
+        {/* Load more button */}
+        {hasMoreMessages && (
+          <button
+            onClick={loadMoreMessages}
+            className="w-full mb-3 py-1.5 text-xs text-center rounded-lg transition-colors"
+            style={{
+              backgroundColor: "var(--vscode-input-background)",
+              color: "var(--vscode-descriptionForeground)",
+              border: "1px solid var(--vscode-panel-border)",
+            }}
+          >
+            Load earlier messages ({effectiveStartIndex} more)
+          </button>
+        )}
+
+        {visibleMessages.map((msg, idx) => {
+          const actualIndex = effectiveStartIndex + idx;
+          return (
+            <ChatMessage
+              key={actualIndex}
+              message={msg}
+              appliedBlocks={appliedBlocks}
+              isLatest={actualIndex === messages.length - 1}
+              isGenerating={
+                isThinking &&
+                actualIndex === messages.length - 1 &&
+                msg.role === "assistant"
+              }
+            />
+          );
+        })}
         <div ref={messagesEndRef} />
+
+        {/* Floating scroll-to-bottom button */}
+        {isUserScrolledUp && isGenerating && (
+          <button
+            onClick={scrollToBottom}
+            className="fixed bottom-28 right-6 z-50 p-2 rounded-full shadow-lg transition-all hover:scale-110"
+            style={{
+              backgroundColor: "var(--vscode-button-background)",
+              color: "var(--vscode-button-foreground)",
+            }}
+            title="Scroll to bottom"
+          >
+            <ArrowDown size={18} />
+          </button>
+        )}
       </div>
 
       {/* Input Area - Modern Redesigned */}
@@ -456,7 +551,6 @@ function Sidebar() {
               />
             </div>
           )}
-
           <div
             className="rounded-2xl"
             style={{ backgroundColor: "var(--vscode-input-background)" }}
@@ -653,6 +747,13 @@ function Sidebar() {
           <span>Use # to add file, @ to add symbol</span>
           <span>Cmd+L to add selection</span>
         </div>
+
+        {/* Context Gauge - bottom progress bar */}
+        {contextStatus && (
+          <div className="mt-2 px-1">
+            <ContextGauge contextStatus={contextStatus} />
+          </div>
+        )}
       </div>
     </div>
   );

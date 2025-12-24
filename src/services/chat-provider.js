@@ -3,6 +3,7 @@ const LLMConnector = require("./llm-connector");
 const DiffApplier = require("./diff-applier");
 const ConversationStore = require("./conversation-store");
 const TitleGenerator = require("./title-generator");
+const TokenContextManager = require("./token-context-manager");
 const { WorkspaceTools } = require("../tools/workspace-tools");
 
 class ChatViewProvider {
@@ -21,6 +22,9 @@ class ChatViewProvider {
     this.storage = null;
     this.titleGenerator = new TitleGenerator(this.llmConnector);
     this.currentConversationId = null;
+
+    // Token tracking
+    this.tokenManager = new TokenContextManager();
   }
 
   setContext(context) {
@@ -702,6 +706,16 @@ class ChatViewProvider {
       let fullResponse = "";
       let turnToolCalls = []; // Declare outside loop
 
+      // Token usage accumulation across all turns
+      let accumulatedUsage = {
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        cachedTokens: 0,
+        totalTokens: 0,
+      };
+      let accumulatedCost = 0;
+
       while (currentTurn < MAX_TURNS) {
         currentTurn++;
         this.log(
@@ -761,6 +775,20 @@ class ChatViewProvider {
           return result;
         };
 
+        // Chunk buffering for smoother streaming (reduce UI updates)
+        const CHUNK_BUFFER_SIZE = 256;
+        let chunkBuffer = "";
+
+        const flushBuffer = () => {
+          if (chunkBuffer.length > 0) {
+            this._view.webview.postMessage({
+              type: "assistantChunk",
+              chunk: chunkBuffer,
+            });
+            chunkBuffer = "";
+          }
+        };
+
         const streamResult = await this.llmConnector.streamChat(
           messages,
           (chunk) => {
@@ -770,14 +798,57 @@ class ChatViewProvider {
 
             turnResponse += chunk;
             fullResponse += chunk;
+            chunkBuffer += chunk;
 
-            this._view.webview.postMessage({
-              type: "assistantChunk",
-              chunk,
-            });
+            // Only send to UI when buffer is full
+            if (chunkBuffer.length >= CHUNK_BUFFER_SIZE) {
+              flushBuffer();
+            }
           },
           { tools, onToolCall: handleToolCall, maxTokens: 32000 }
         );
+
+        // Flush any remaining buffer after stream completes
+        flushBuffer();
+
+        // Log token usage if available
+        if (streamResult?.usage) {
+          const providerName =
+            this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+            "unknown";
+          const modelName =
+            this.llmConnector.getCurrentProvider()?.defaultModel || "unknown";
+          const normalizedUsage = this.tokenManager.normalizeUsage(
+            streamResult.usage,
+            providerName
+          );
+          const cost = this.tokenManager.calculateCost(
+            normalizedUsage,
+            providerName,
+            modelName
+          );
+          this.log(
+            this.tokenManager.formatUsageLog(
+              normalizedUsage,
+              cost,
+              providerName,
+              modelName
+            )
+          );
+
+          // Accumulate usage across turns
+          if (normalizedUsage) {
+            accumulatedUsage.inputTokens += normalizedUsage.inputTokens || 0;
+            accumulatedUsage.outputTokens += normalizedUsage.outputTokens || 0;
+            accumulatedUsage.reasoningTokens +=
+              normalizedUsage.reasoningTokens || 0;
+            accumulatedUsage.cachedTokens += normalizedUsage.cachedTokens || 0;
+            accumulatedUsage.totalTokens += normalizedUsage.totalTokens || 0;
+          }
+          if (cost?.totalCost) {
+            accumulatedCost += cost.totalCost;
+          }
+        }
 
         // Check if response was truncated due to token limit
         const wasTruncated = streamResult?.wasTruncated || false;
@@ -875,11 +946,45 @@ class ChatViewProvider {
       // Parse code blocks
       const blocks = DiffApplier.parseAiderBlocks(fullResponse);
 
-      // Send complete
+      // Send complete with token usage
+      // Calculate context status for gauge
+      const providerName =
+        this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+        "openai";
+      const modelName =
+        this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o";
+      const contextStatus = this.tokenManager.getContextStatus(
+        accumulatedUsage.inputTokens + accumulatedUsage.outputTokens,
+        providerName,
+        modelName
+      );
+
       this._view.webview.postMessage({
         type: "assistantComplete",
         message: fullResponse,
         blocks,
+        usage:
+          accumulatedUsage.totalTokens > 0
+            ? {
+                inputTokens: accumulatedUsage.inputTokens,
+                outputTokens: accumulatedUsage.outputTokens,
+                reasoningTokens: accumulatedUsage.reasoningTokens,
+                cachedTokens: accumulatedUsage.cachedTokens,
+                totalTokens: accumulatedUsage.totalTokens,
+                cost: accumulatedCost,
+                provider: providerName,
+                model: modelName,
+              }
+            : null,
+        contextStatus: {
+          usedPercentage: contextStatus.usedPercentage,
+          currentTokens: contextStatus.currentTokens,
+          maxTokens: contextStatus.maxTokens,
+          remainingTokens: contextStatus.remainingTokens,
+          status: contextStatus.status,
+          needsSliding: contextStatus.needsSliding,
+          needsSummarization: contextStatus.needsSummarization,
+        },
       });
 
       if (turnToolCalls.length === 0) {
@@ -903,6 +1008,45 @@ class ChatViewProvider {
               model: this.llmConnector.getCurrentProvider()?.model || null,
               toolCalls: turnToolCalls.length > 0 ? turnToolCalls : null,
               codeBlocks: blocks && blocks.length > 0 ? blocks : null,
+              usage:
+                accumulatedUsage.totalTokens > 0
+                  ? {
+                      inputTokens: accumulatedUsage.inputTokens,
+                      outputTokens: accumulatedUsage.outputTokens,
+                      reasoningTokens: accumulatedUsage.reasoningTokens,
+                      cachedTokens: accumulatedUsage.cachedTokens,
+                      totalTokens: accumulatedUsage.totalTokens,
+                      cost: accumulatedCost,
+                      provider:
+                        this.llmConnector
+                          .getCurrentProvider()
+                          ?.getName()
+                          ?.toLowerCase() || null,
+                      model:
+                        this.llmConnector.getCurrentProvider()?.defaultModel ||
+                        null,
+                    }
+                  : null,
+            }
+          );
+
+          // Update conversation with cumulative token count for persistence
+          const providerName =
+            this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+            "openai";
+          const modelName =
+            this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o";
+          const contextStatus = this.tokenManager.getContextStatus(
+            this.tokenManager.getCumulativeTokens(),
+            providerName,
+            modelName
+          );
+          await this.storage.updateConversation(
+            workspaceId,
+            this.currentConversationId,
+            {
+              cumulativeTokens: contextStatus.currentTokens,
+              contextMaxTokens: contextStatus.maxTokens,
             }
           );
 
@@ -1683,6 +1827,43 @@ class ChatViewProvider {
         isAppend: !!beforeIndex,
         conversation,
       });
+
+      // Send persisted context status if available (for context gauge)
+      if (conversation?.cumulativeTokens && !beforeIndex) {
+        // Restore token manager state with persisted tokens
+        this.tokenManager.setCumulativeTokens(conversation.cumulativeTokens);
+
+        const maxTokens =
+          conversation.contextMaxTokens ||
+          this.tokenManager.getContextInfo(
+            this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+              "openai",
+            this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o"
+          ).maxTokens;
+
+        const usedPercentage =
+          (conversation.cumulativeTokens / maxTokens) * 100;
+
+        this._view.webview.postMessage({
+          type: "contextStatus",
+          contextStatus: {
+            usedPercentage,
+            currentTokens: conversation.cumulativeTokens,
+            maxTokens,
+            remainingTokens: maxTokens - conversation.cumulativeTokens,
+            status:
+              usedPercentage >= 85
+                ? "critical"
+                : usedPercentage >= 70
+                ? "warning"
+                : usedPercentage >= 50
+                ? "moderate"
+                : "normal",
+            needsSliding: usedPercentage >= 70,
+            needsSummarization: usedPercentage >= 75,
+          },
+        });
+      }
     } catch (error) {
       this.log("Error loading messages:", error);
     }

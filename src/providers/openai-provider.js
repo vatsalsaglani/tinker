@@ -313,6 +313,7 @@ class OpenAIProvider extends BaseProvider {
         let allEvents = [];
         let currentToolCalls = new Map();
         let finishReason = null;
+        let usage = null;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -336,13 +337,17 @@ class OpenAIProvider extends BaseProvider {
                 // Handle different event types from Responses API
                 const eventType = parsed.type;
 
-                // Track finish reason from response.done or response.completed
+                // Track finish reason and usage from response.done or response.completed
                 if (
                   eventType === "response.done" ||
                   eventType === "response.completed"
                 ) {
                   finishReason =
                     parsed.response?.status || parsed.status || "stop";
+                  // Capture usage from response
+                  if (parsed.response?.usage) {
+                    usage = parsed.response.usage;
+                  }
                   // Check output items for finish reasons
                   if (parsed.response?.output) {
                     for (const item of parsed.response.output) {
@@ -434,11 +439,12 @@ class OpenAIProvider extends BaseProvider {
           timestamp: new Date().toISOString(),
         });
 
-        // Return object with content and truncation info
+        // Return object with content, truncation info, and usage
         return {
           content: fullResponse,
           finishReason: finishReason || "stop",
           wasTruncated,
+          usage,
         };
       } catch (error) {
         console.error("[OpenAI] Responses API ERROR:", error);
@@ -489,13 +495,26 @@ class OpenAIProvider extends BaseProvider {
         const stream = await this.client.chat.completions.create({
           ...args,
           stream: true,
+          stream_options: { include_usage: true },
         });
 
         let fullResponse = "";
         let currentToolCall = null;
+        let usage = null;
+        let finishReason = "stop";
 
         for await (const chunk of stream) {
-          const delta = chunk.choices[0]?.delta;
+          // Capture usage from final chunk (requires stream_options.include_usage)
+          if (chunk.usage) {
+            usage = chunk.usage;
+          }
+
+          // Track finish reason
+          if (chunk.choices?.[0]?.finish_reason) {
+            finishReason = chunk.choices[0].finish_reason;
+          }
+
+          const delta = chunk.choices?.[0]?.delta;
 
           if (delta?.content) {
             fullResponse += delta.content;
@@ -563,13 +582,11 @@ class OpenAIProvider extends BaseProvider {
           }
         }
 
-        // Get the last finish_reason from the for loop
-        let finishReason = "stop"; // Default
-
         this.writeDebugLog("stream_response", {
           api: "chat_completions",
           model,
           finishReason,
+          usage,
           fullResponse:
             fullResponse.substring(0, 500) +
             (fullResponse.length > 500 ? "..." : ""),
@@ -581,6 +598,7 @@ class OpenAIProvider extends BaseProvider {
           content: fullResponse,
           finishReason,
           wasTruncated: finishReason === "length",
+          usage,
         };
       } catch (error) {
         console.error("[OpenAI] API ERROR:", error);

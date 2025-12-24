@@ -35,6 +35,28 @@ class ConversationStore {
   }
 
   /**
+   * Get storage key for conversation stats
+   */
+  getConversationStatsKey(conversationId) {
+    return `tinker_conv_stats_${conversationId}`;
+  }
+
+  /**
+   * Get storage key for workspace stats
+   */
+  getWorkspaceStatsKey(workspaceId) {
+    const sanitized = workspaceId.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50);
+    return `tinker_workspace_stats_${sanitized}`;
+  }
+
+  /**
+   * Get storage key for global stats
+   */
+  getGlobalStatsKey() {
+    return `tinker_global_stats`;
+  }
+
+  /**
    * Generate unique ID
    */
   generateId() {
@@ -239,6 +261,7 @@ class ConversationStore {
       hasToolCalls,
       codeBlocks: message.codeBlocks || null,
       contextChips: message.contextChips || null,
+      usage: message.usage || null, // Token usage data
       createdAt: now,
     };
 
@@ -248,6 +271,16 @@ class ConversationStore {
 
     const key = this.getConversationsKey(workspaceId);
     await this.context.globalState.update(key, all);
+
+    // Update aggregate statistics if usage data present
+    if (message.usage && message.role === "assistant") {
+      await this.updateConversationStats(
+        workspaceId,
+        conversationId,
+        message.usage,
+        hasToolCalls ? toolCalls.length : 0
+      );
+    }
 
     return { ...newMessage, toolCalls: hasToolCalls ? toolCalls : null };
   }
@@ -390,6 +423,170 @@ class ConversationStore {
       sizeKB: (totalSize / 1024).toFixed(2),
       pinnedCount: all.filter((c) => c.isPinned).length,
     };
+  }
+
+  // ==================== TOKEN USAGE AGGREGATION ====================
+
+  /**
+   * Update conversation-level token statistics
+   */
+  async updateConversationStats(
+    workspaceId,
+    conversationId,
+    usage,
+    toolCallCount = 0
+  ) {
+    const key = this.getConversationStatsKey(conversationId);
+    const existing = this.context.globalState.get(key, {
+      conversationId,
+      workspaceId,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalReasoningTokens: 0,
+      totalCachedTokens: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      modelBreakdown: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Update totals
+    existing.totalInputTokens += usage.inputTokens || 0;
+    existing.totalOutputTokens += usage.outputTokens || 0;
+    existing.totalReasoningTokens += usage.reasoningTokens || 0;
+    existing.totalCachedTokens += usage.cachedTokens || 0;
+    existing.totalTokens += usage.totalTokens || 0;
+    existing.totalCost += usage.cost || 0;
+    existing.messageCount += 1;
+    existing.toolCallCount += toolCallCount;
+    existing.updatedAt = new Date().toISOString();
+
+    // Update model breakdown
+    const modelKey = usage.model || "unknown";
+    if (!existing.modelBreakdown[modelKey]) {
+      existing.modelBreakdown[modelKey] = { tokens: 0, cost: 0, count: 0 };
+    }
+    existing.modelBreakdown[modelKey].tokens += usage.totalTokens || 0;
+    existing.modelBreakdown[modelKey].cost += usage.cost || 0;
+    existing.modelBreakdown[modelKey].count += 1;
+
+    await this.context.globalState.update(key, existing);
+
+    // Also update workspace and global stats
+    await this.updateWorkspaceStats(workspaceId, usage, toolCallCount);
+    await this.updateGlobalStats(usage, toolCallCount);
+
+    return existing;
+  }
+
+  /**
+   * Update workspace-level token statistics
+   */
+  async updateWorkspaceStats(workspaceId, usage, toolCallCount = 0) {
+    const key = this.getWorkspaceStatsKey(workspaceId);
+    const existing = this.context.globalState.get(key, {
+      workspaceId,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalReasoningTokens: 0,
+      totalCachedTokens: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      modelBreakdown: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    existing.totalInputTokens += usage.inputTokens || 0;
+    existing.totalOutputTokens += usage.outputTokens || 0;
+    existing.totalReasoningTokens += usage.reasoningTokens || 0;
+    existing.totalCachedTokens += usage.cachedTokens || 0;
+    existing.totalTokens += usage.totalTokens || 0;
+    existing.totalCost += usage.cost || 0;
+    existing.messageCount += 1;
+    existing.toolCallCount += toolCallCount;
+    existing.updatedAt = new Date().toISOString();
+
+    const modelKey = usage.model || "unknown";
+    if (!existing.modelBreakdown[modelKey]) {
+      existing.modelBreakdown[modelKey] = { tokens: 0, cost: 0, count: 0 };
+    }
+    existing.modelBreakdown[modelKey].tokens += usage.totalTokens || 0;
+    existing.modelBreakdown[modelKey].cost += usage.cost || 0;
+    existing.modelBreakdown[modelKey].count += 1;
+
+    await this.context.globalState.update(key, existing);
+    return existing;
+  }
+
+  /**
+   * Update global token statistics
+   */
+  async updateGlobalStats(usage, toolCallCount = 0) {
+    const key = this.getGlobalStatsKey();
+    const existing = this.context.globalState.get(key, {
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalReasoningTokens: 0,
+      totalCachedTokens: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      modelBreakdown: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    existing.totalInputTokens += usage.inputTokens || 0;
+    existing.totalOutputTokens += usage.outputTokens || 0;
+    existing.totalReasoningTokens += usage.reasoningTokens || 0;
+    existing.totalCachedTokens += usage.cachedTokens || 0;
+    existing.totalTokens += usage.totalTokens || 0;
+    existing.totalCost += usage.cost || 0;
+    existing.messageCount += 1;
+    existing.toolCallCount += toolCallCount;
+    existing.updatedAt = new Date().toISOString();
+
+    const modelKey = usage.model || "unknown";
+    if (!existing.modelBreakdown[modelKey]) {
+      existing.modelBreakdown[modelKey] = { tokens: 0, cost: 0, count: 0 };
+    }
+    existing.modelBreakdown[modelKey].tokens += usage.totalTokens || 0;
+    existing.modelBreakdown[modelKey].cost += usage.cost || 0;
+    existing.modelBreakdown[modelKey].count += 1;
+
+    await this.context.globalState.update(key, existing);
+    return existing;
+  }
+
+  /**
+   * Get conversation-level token statistics
+   */
+  async getConversationStats(conversationId) {
+    const key = this.getConversationStatsKey(conversationId);
+    return this.context.globalState.get(key, null);
+  }
+
+  /**
+   * Get workspace-level token statistics
+   */
+  async getWorkspaceStats(workspaceId) {
+    const key = this.getWorkspaceStatsKey(workspaceId);
+    return this.context.globalState.get(key, null);
+  }
+
+  /**
+   * Get global token statistics
+   */
+  async getGlobalStats() {
+    const key = this.getGlobalStatsKey();
+    return this.context.globalState.get(key, null);
   }
 }
 
