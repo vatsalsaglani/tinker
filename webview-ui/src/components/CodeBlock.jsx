@@ -1,6 +1,6 @@
 // tinker/webview-ui/src/components/CodeBlock.jsx
-import React, { useMemo } from "react";
-import { FileCode, Check, Zap, Loader2 } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { FileCode, Check, Zap, Loader2, Copy, CheckCheck } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
 import { useVSCodeMessage } from "../hooks/useVSCodeMessage";
@@ -74,10 +74,20 @@ function highlightCode(code, language) {
 
 function CodeBlock({ block, appliedBlocks = new Set(), isStreaming = false }) {
   const vscode = useVSCodeMessage(() => {});
+  const [copied, setCopied] = useState(false);
 
   const contentHash = (block.search || block.content || "").slice(0, 50);
   const blockKey = `${block.filePath}:${block.type}:${contentHash}`;
   const isApplied = appliedBlocks.has(blockKey);
+
+  // Copy content to clipboard
+  const handleCopy = () => {
+    const content = block.content || block.replace || "";
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   const language = useMemo(
     () => getLanguageFromPath(block.filePath),
@@ -210,19 +220,31 @@ function CodeBlock({ block, appliedBlocks = new Set(), isStreaming = false }) {
             )}
           </div>
           {!isStreaming && (
-            <button
-              onClick={handleApply}
-              disabled={isApplied}
-              className={clsx(
-                "text-[10px] px-3 py-1 rounded-lg inline-flex items-center gap-1 transition-all",
-                isApplied
-                  ? "bg-white/5 text-white/30 cursor-not-allowed"
-                  : "bg-tinker-copper/20 text-tinker-copper border border-tinker-copper/30 hover:bg-tinker-copper/30"
+            <div className="flex items-center gap-1.5">
+              {isApplied && (
+                <button
+                  onClick={handleCopy}
+                  className="text-[10px] px-2 py-1 rounded-lg inline-flex items-center gap-1 transition-all bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                  title="Copy to clipboard"
+                >
+                  {copied ? <CheckCheck size={10} /> : <Copy size={10} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
               )}
-            >
-              {isApplied ? <Check size={10} /> : <Zap size={10} />}
-              {isApplied ? "Applied" : "Apply"}
-            </button>
+              <button
+                onClick={handleApply}
+                disabled={isApplied}
+                className={clsx(
+                  "text-[10px] px-3 py-1 rounded-lg inline-flex items-center gap-1 transition-all",
+                  isApplied
+                    ? "bg-green-500/15 text-green-400 cursor-default"
+                    : "bg-tinker-copper/20 text-tinker-copper border border-tinker-copper/30 hover:bg-tinker-copper/30"
+                )}
+              >
+                {isApplied ? <Check size={10} /> : <Zap size={10} />}
+                {isApplied ? "Applied" : "Apply"}
+              </button>
+            </div>
           )}
         </div>
 

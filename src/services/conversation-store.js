@@ -16,6 +16,30 @@ class ConversationStore {
     this.context = context;
     this.DEFAULT_MESSAGE_PAGE_SIZE = 50;
     this.MAX_CONVERSATIONS = 100;
+
+    const os = require("os");
+    const path = require("path");
+    const fs = require("fs");
+    this._usageFilePath = path.join(os.homedir(), ".tinker", "usage.json");
+    this._ensureTinkerDir();
+  }
+
+  /**
+   * Ensure ~/.tinker directory exists
+   */
+  _ensureTinkerDir() {
+    const path = require("path");
+    const fs = require("fs");
+    const tinkerDir = path.dirname(this._usageFilePath);
+    if (!fs.existsSync(tinkerDir)) {
+      try {
+        fs.mkdirSync(tinkerDir, { recursive: true });
+      } catch (err) {
+        console.error(
+          `[ConversationStore] Failed to create .tinker dir: ${err.message}`
+        );
+      }
+    }
   }
 
   /**
@@ -82,7 +106,7 @@ class ConversationStore {
     // Sort by updatedAt descending, pinned first
     const sorted = [...all].sort((a, b) => {
       if (a.isPinned !== b.isPinned) return b.isPinned ? 1 : -1;
-      return new Date(b.updatedAt) - new Date(a.updatedAt);
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
 
     const start = page * pageSize;
@@ -120,6 +144,7 @@ class ConversationStore {
       messages: [],
       messageCount: 0,
       displayFromIndex: 0,
+      appliedBlocks: [], // Track which code blocks have been applied
       createdAt: now,
       updatedAt: now,
       ...initialData,
@@ -227,10 +252,13 @@ class ConversationStore {
    * @param {Object} message - Message object
    * @param {string} message.role - 'user' or 'assistant'
    * @param {string|Array} message.content - Message content
-   * @param {string} message.provider - LLM provider used
-   * @param {string} message.model - Model used
-   * @param {Array} message.toolCalls - Optional tool calls (stored separately)
-   * @param {Object} message.metadata - Additional metadata
+   * @param {string} [message.provider] - LLM provider used
+   * @param {string} [message.model] - Model used
+   * @param {Array} [message.toolCalls] - Optional tool calls
+   * @param {Array} [message.codeBlocks] - Optional code blocks
+   * @param {Array} [message.contextChips] - Optional context chips
+   * @param {Object} [message.usage] - Optional usage data
+   * @param {Object} [message.metadata] - Additional metadata
    */
   async addMessage(workspaceId, conversationId, message) {
     const all = await this.getAll(workspaceId);
@@ -407,6 +435,59 @@ class ConversationStore {
     });
   }
 
+  // ==================== APPLIED BLOCKS TRACKING ====================
+
+  /**
+   * Add a block key to the applied blocks list
+   * @param {string} workspaceId - Workspace ID
+   * @param {string} conversationId - Conversation ID
+   * @param {string} blockKey - Unique identifier for the block (filePath:type:contentHash)
+   */
+  async addAppliedBlock(workspaceId, conversationId, blockKey) {
+    const conversation = await this.getById(workspaceId, conversationId);
+    if (!conversation) return false;
+
+    // Initialize appliedBlocks if not present (for legacy conversations)
+    const appliedBlocks = conversation.appliedBlocks || [];
+
+    // Avoid duplicates
+    if (!appliedBlocks.includes(blockKey)) {
+      appliedBlocks.push(blockKey);
+      await this.updateConversation(workspaceId, conversationId, {
+        appliedBlocks,
+      });
+    }
+
+    return true;
+  }
+
+  /**
+   * Get all applied block keys for a conversation
+   * @param {string} workspaceId - Workspace ID
+   * @param {string} conversationId - Conversation ID
+   * @returns {string[]} Array of applied block keys
+   */
+  async getAppliedBlocks(workspaceId, conversationId) {
+    const conversation = await this.getById(workspaceId, conversationId);
+    if (!conversation) return [];
+    return conversation.appliedBlocks || [];
+  }
+
+  /**
+   * Check if a block has been applied
+   * @param {string} workspaceId - Workspace ID
+   * @param {string} conversationId - Conversation ID
+   * @param {string} blockKey - Block key to check
+   * @returns {boolean}
+   */
+  async isBlockApplied(workspaceId, conversationId, blockKey) {
+    const appliedBlocks = await this.getAppliedBlocks(
+      workspaceId,
+      conversationId
+    );
+    return appliedBlocks.includes(blockKey);
+  }
+
   // ==================== UTILITY METHODS ====================
 
   /**
@@ -562,7 +643,143 @@ class ConversationStore {
     existing.modelBreakdown[modelKey].count += 1;
 
     await this.context.globalState.update(key, existing);
+    await this._syncUsageToExternalFile(usage, toolCallCount);
     return existing;
+  }
+
+  /**
+   * Sync usage data to an external file for cross-workspace persistence
+   */
+  async _syncUsageToExternalFile(usage, toolCallCount = 0) {
+    const fs = require("fs");
+    try {
+      let globalUsage = {
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalReasoningTokens: 0,
+        totalCachedTokens: 0,
+        totalTokens: 0,
+        totalCost: 0,
+        messageCount: 0,
+        toolCallCount: 0,
+        modelBreakdown: {},
+        workspaceBreakdown: {},
+        lastUpdated: new Date().toISOString(),
+      };
+
+      if (fs.existsSync(this._usageFilePath)) {
+        try {
+          const content = fs.readFileSync(this._usageFilePath, "utf8");
+          globalUsage = JSON.parse(content);
+        } catch (e) {
+          console.error(
+            `[ConversationStore] Error parsing usage file: ${e.message}`
+          );
+        }
+      }
+
+      // Update global totals
+      globalUsage.totalInputTokens += usage.inputTokens || 0;
+      globalUsage.totalOutputTokens += usage.outputTokens || 0;
+      globalUsage.totalReasoningTokens += usage.reasoningTokens || 0;
+      globalUsage.totalCachedTokens += usage.cachedTokens || 0;
+      globalUsage.totalTokens += usage.totalTokens || 0;
+      globalUsage.totalCost += usage.cost || 0;
+      globalUsage.messageCount += 1;
+      globalUsage.toolCallCount += toolCallCount;
+      globalUsage.lastUpdated = new Date().toISOString();
+
+      // Update model breakdown
+      const modelKey = usage.model || "unknown";
+      if (!globalUsage.modelBreakdown[modelKey]) {
+        globalUsage.modelBreakdown[modelKey] = { tokens: 0, cost: 0, count: 0 };
+      }
+      globalUsage.modelBreakdown[modelKey].tokens += usage.totalTokens || 0;
+      globalUsage.modelBreakdown[modelKey].cost += usage.cost || 0;
+      globalUsage.modelBreakdown[modelKey].count += 1;
+
+      // Update workspace breakdown
+      const workspaceId = this._getCurrentWorkspaceId();
+      if (!globalUsage.workspaceBreakdown[workspaceId]) {
+        globalUsage.workspaceBreakdown[workspaceId] = {
+          tokens: 0,
+          cost: 0,
+          count: 0,
+          name: this._getWorkspaceName(),
+        };
+      }
+      globalUsage.workspaceBreakdown[workspaceId].tokens +=
+        usage.totalTokens || 0;
+      globalUsage.workspaceBreakdown[workspaceId].cost += usage.cost || 0;
+      globalUsage.workspaceBreakdown[workspaceId].count += 1;
+
+      fs.writeFileSync(
+        this._usageFilePath,
+        JSON.stringify(globalUsage, null, 2)
+      );
+    } catch (err) {
+      console.error(
+        `[ConversationStore] Failed to sync usage to file: ${err.message}`
+      );
+    }
+  }
+
+  /**
+   * Get workspace ID using VS Code API
+   */
+  _getCurrentWorkspaceId() {
+    const vscode = require("vscode");
+    if (
+      vscode.workspace.workspaceFolders &&
+      vscode.workspace.workspaceFolders.length > 0
+    ) {
+      return vscode.workspace.workspaceFolders[0].uri.toString();
+    }
+    return "default-workspace";
+  }
+
+  /**
+   * Get workspace name using VS Code API
+   */
+  _getWorkspaceName() {
+    const vscode = require("vscode");
+    if (
+      vscode.workspace.workspaceFolders &&
+      vscode.workspace.workspaceFolders.length > 0
+    ) {
+      return vscode.workspace.workspaceFolders[0].name;
+    }
+    return "Default";
+  }
+
+  /**
+   * Get aggregated usage stats for the dashboard
+   */
+  async getAggregatedUsage(workspaceId) {
+    const fs = require("fs");
+    const workspaceStats = await this.getWorkspaceStats(workspaceId);
+    let globalStats = null;
+
+    if (fs.existsSync(this._usageFilePath)) {
+      try {
+        const content = fs.readFileSync(this._usageFilePath, "utf8");
+        globalStats = JSON.parse(content);
+      } catch (err) {
+        console.error(
+          `[ConversationStore] Failed to read usage file: ${err.message}`
+        );
+      }
+    }
+
+    // Fallback to globalState if file doesn't exist yet
+    if (!globalStats) {
+      globalStats = await this.getGlobalStats();
+    }
+
+    return {
+      workspace: workspaceStats,
+      global: globalStats,
+    };
   }
 
   /**

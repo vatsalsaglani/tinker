@@ -14,6 +14,9 @@ export function useChat() {
   // Use ref to track tool calls that belong to current assistant turn
   const currentToolCallsRef = useRef([]);
 
+  // Use ref to track ordered parts (text chunks and tool calls in order)
+  const partsRef = useRef([]);
+
   /**
    * Format persisted messages for UI display
    * Converts array content back to simpler format if needed
@@ -57,8 +60,9 @@ export function useChat() {
             content: message.message,
           },
         ]);
-        // Reset tool calls for new user message
+        // Reset tool calls and parts for new user message
         currentToolCallsRef.current = [];
+        partsRef.current = [];
         break;
 
       case "thinking":
@@ -66,6 +70,14 @@ export function useChat() {
         break;
 
       case "assistantChunk":
+        // Add to ordered parts - extend last text part or create new one
+        const lastPart = partsRef.current[partsRef.current.length - 1];
+        if (lastPart?.type === "text") {
+          lastPart.content += message.chunk;
+        } else {
+          partsRef.current.push({ type: "text", content: message.chunk });
+        }
+
         setCurrentAssistantMessage((prev) => {
           if (!prev) {
             return {
@@ -73,12 +85,14 @@ export function useChat() {
               content: message.chunk,
               isStreaming: true,
               toolCalls: currentToolCallsRef.current,
+              parts: [...partsRef.current],
             };
           }
           return {
             ...prev,
             content: prev.content + message.chunk,
             toolCalls: currentToolCallsRef.current,
+            parts: [...partsRef.current],
           };
         });
         break;
@@ -97,12 +111,14 @@ export function useChat() {
               content: finalContent,
               codeBlocks: message.blocks || [],
               toolCalls: finalToolCalls,
+              parts: [...partsRef.current],
               usage: message.usage || null, // Token usage data
             },
           ]);
         }
         setCurrentAssistantMessage(null);
         currentToolCallsRef.current = [];
+        partsRef.current = [];
         setIsGenerating(false);
 
         // Update context status
@@ -123,12 +139,16 @@ export function useChat() {
           newToolCall,
         ];
 
+        // Add tool call part to ordered sequence
+        partsRef.current.push({ type: "toolCall", id: message.tool.id });
+
         // Update current assistant message to show tool call immediately
         setCurrentAssistantMessage((prev) => ({
           role: "assistant",
           content: prev?.content || "",
           isStreaming: true,
           toolCalls: currentToolCallsRef.current,
+          parts: [...partsRef.current],
         }));
         break;
 
@@ -144,7 +164,19 @@ export function useChat() {
         setCurrentAssistantMessage((prev) => ({
           ...prev,
           toolCalls: currentToolCallsRef.current,
+          parts: [...partsRef.current],
         }));
+        break;
+
+      case "usageUpdate":
+        // Live usage update during streaming - update both message and context
+        setCurrentAssistantMessage((prev) => ({
+          ...prev,
+          streamingUsage: message.usage,
+        }));
+        if (message.contextStatus) {
+          setContextStatus(message.contextStatus);
+        }
         break;
 
       case "error":
@@ -166,6 +198,7 @@ export function useChat() {
         setIsThinking(false);
         setCurrentAssistantMessage(null);
         currentToolCallsRef.current = [];
+        partsRef.current = [];
         break;
 
       case "messagesLoaded":
@@ -183,6 +216,7 @@ export function useChat() {
         setMessages([]);
         setCurrentAssistantMessage(null);
         currentToolCallsRef.current = [];
+        partsRef.current = [];
         break;
     }
   });

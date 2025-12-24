@@ -20,7 +20,7 @@ class GeminiProvider extends BaseProvider {
 
     this.defaultModel = config.model || "gemini-2.0-flash";
 
-    // Debug logging setup - disabled by default for production
+    // Debug logging setup - disabled by default
     this.debugDir = config.debugDir || path.join(os.homedir(), ".tinker-debug");
     this.enableDebugLogging = config.enableDebugLogging || false;
   }
@@ -37,28 +37,6 @@ class GeminiProvider extends BaseProvider {
       "gemini-1.5-flash",
       "gemini-1.5-pro",
     ];
-  }
-
-  /**
-   * Write debug log to timestamped file
-   */
-  writeDebugLog(prefix, data) {
-    if (!this.enableDebugLogging) return;
-
-    try {
-      if (!fs.existsSync(this.debugDir)) {
-        fs.mkdirSync(this.debugDir, { recursive: true });
-      }
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const filename = `gemini_${prefix}_${timestamp}.json`;
-      const filepath = path.join(this.debugDir, filename);
-
-      fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
-      console.log(`[Gemini DEBUG] Wrote log to: ${filepath}`);
-    } catch (error) {
-      console.error("[Gemini DEBUG] Failed to write log file:", error.message);
-    }
   }
 
   async chat(messages, options = {}) {
@@ -112,13 +90,6 @@ class GeminiProvider extends BaseProvider {
       args.tool_choice = "auto";
       console.log(`[Gemini] Adding ${tools.length} tools`);
     }
-
-    this.writeDebugLog("stream_request", {
-      model,
-      toolCount: tools?.length || 0,
-      messageCount: messages.length,
-      timestamp: new Date().toISOString(),
-    });
 
     try {
       console.log(
@@ -243,6 +214,36 @@ class GeminiProvider extends BaseProvider {
         `[Gemini] Stream complete - chunks: ${chunkCount}, responseLength: ${fullResponse.length}, finishReason: ${finishReason}`
       );
 
+      // Detect malformed tool call response - when model outputs JSON that looks like tool args as text
+      // This happens when Gemini incorrectly returns { "reason": "..." } as text instead of a tool call
+      if (fullResponse.length > 0 && finishReason === "stop" && onToolCall) {
+        const trimmedResponse = fullResponse.trim();
+        // Check if response looks like it was meant to be a tool call
+        if (
+          trimmedResponse.startsWith("{") &&
+          trimmedResponse.endsWith("}") &&
+          trimmedResponse.includes('"reason"')
+        ) {
+          try {
+            const parsed = JSON.parse(trimmedResponse);
+            if (parsed.reason && Object.keys(parsed).length <= 3) {
+              console.warn(
+                `[Gemini] WARNING: Model returned what looks like tool call arguments as text content.`
+              );
+              console.warn(
+                `[Gemini] This is a known issue with some Gemini preview models.`
+              );
+              console.warn(
+                `[Gemini] Response: ${trimmedResponse.substring(0, 200)}`
+              );
+              // Don't fail - just log the warning. The model may need to be retried or the conversation continued.
+            }
+          } catch {
+            // Not valid JSON, ignore
+          }
+        }
+      }
+
       // If we got no response and no tool calls, log a warning
       if (
         fullResponse.length === 0 &&
@@ -259,15 +260,6 @@ class GeminiProvider extends BaseProvider {
 
       const wasTruncated = finishReason === "length";
 
-      this.writeDebugLog("stream_response", {
-        model,
-        finishReason,
-        wasTruncated,
-        responseLength: fullResponse.length,
-        chunkCount,
-        timestamp: new Date().toISOString(),
-      });
-
       // Return consistent format with OpenAI provider
       return {
         content: fullResponse,
@@ -282,11 +274,6 @@ class GeminiProvider extends BaseProvider {
         status: error.status,
         code: error.code,
         type: error.type,
-      });
-      this.writeDebugLog("stream_error", {
-        error: error.message,
-        status: error.status,
-        timestamp: new Date().toISOString(),
       });
       throw new Error(`Gemini Streaming Error: ${error.message}`);
     }

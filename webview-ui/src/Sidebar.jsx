@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import ChatMessage from "./components/ChatMessage";
 import ContextChip from "./components/ContextChip";
@@ -10,6 +10,7 @@ import ChipInput from "./components/ChipInput";
 import ImageAttachments from "./components/ImageAttachments";
 import Dropdown from "./components/Dropdown";
 import ContextGauge from "./components/ContextGauge";
+import ReviewBar from "./components/ReviewBar";
 import { useVSCodeMessage } from "./hooks/useVSCodeMessage";
 import { useChat } from "./hooks/useChat";
 import { useAutocomplete } from "./hooks/useAutocomplete";
@@ -100,6 +101,47 @@ function Sidebar() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Aggregate all pending code blocks from messages
+  const pendingBlocks = useMemo(() => {
+    const blocks = [];
+    messages.forEach((msg) => {
+      if (msg.role === "assistant" && msg.codeBlocks) {
+        msg.codeBlocks.forEach((block) => {
+          // Generate a unique key for each block
+          const contentHash = block.content
+            ? block.content.substring(0, 50)
+            : block.replace?.substring(0, 50) || "";
+          blocks.push({
+            ...block,
+            contentHash,
+            blockKey: `${block.filePath}:${block.type}:${contentHash}`,
+          });
+        });
+      }
+    });
+    return blocks;
+  }, [messages]);
+
+  // Handler for applying a single block
+  const handleApplyBlock = (block) => {
+    vscode.postMessage({
+      type: "applyCodeBlock",
+      block: block,
+    });
+  };
+
+  // Handler for applying all pending blocks
+  const handleApplyAll = () => {
+    pendingBlocks
+      .filter((block) => !appliedBlocks.has(block.blockKey))
+      .forEach((block) => {
+        vscode.postMessage({
+          type: "applyCodeBlock",
+          block: block,
+        });
+      });
+  };
+
   const vscode = useVSCodeMessage((message) => {
     if (message.type === "openContext") {
       // Context chip was clicked - handled by extension
@@ -125,6 +167,9 @@ function Sidebar() {
         blockKey = `${message.filePath}:${message.blockType}:${contentHash}`;
       }
       setAppliedBlocks((prev) => new Set(prev).add(blockKey));
+    } else if (message.type === "messagesLoaded" && message.appliedBlocks) {
+      // Load persisted applied blocks when switching conversations
+      setAppliedBlocks(new Set(message.appliedBlocks));
     }
   });
 
@@ -494,6 +539,21 @@ function Sidebar() {
             <ArrowDown size={18} />
           </button>
         )}
+      </div>
+
+      {/* Review Bar - Shows pending file changes */}
+      <div className="px-3">
+        <ReviewBar
+          pendingBlocks={pendingBlocks}
+          appliedBlocks={appliedBlocks}
+          onReviewClick={() => {
+            vscode.postMessage({
+              type: "openReviewPanel",
+              pendingBlocks: pendingBlocks,
+              appliedBlocks: Array.from(appliedBlocks),
+            });
+          }}
+        />
       </div>
 
       {/* Input Area - Modern Redesigned */}

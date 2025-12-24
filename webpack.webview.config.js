@@ -7,6 +7,8 @@ module.exports = {
     sidebar: "./webview-ui/src/Sidebar.jsx",
     editor: "./webview-ui/src/Editor.jsx",
     "config-panel": "./webview-ui/src/ConfigPanel.jsx",
+    "usage-dashboard": "./webview-ui/src/UsageDashboard.jsx",
+    "review-panel": "./webview-ui/src/ReviewPanel.jsx",
   },
   output: {
     path: path.resolve(__dirname, "webview-ui/dist"),

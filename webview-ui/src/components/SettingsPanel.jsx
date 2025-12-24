@@ -1,6 +1,14 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { X, Save, Settings, Key, ExternalLink } from "lucide-react";
+import {
+  X,
+  Save,
+  Settings,
+  Key,
+  ExternalLink,
+  BarChart2,
+  ChevronRight,
+} from "lucide-react";
 import { useVSCodeMessage } from "../hooks/useVSCodeMessage";
 import {
   OpenAIIcon,
@@ -53,6 +61,11 @@ function SettingsPanel({ onClose }) {
 
   const handleOpenConfigPanel = () => {
     vscode.postMessage({ type: "openConfigPanel" });
+    onClose();
+  };
+
+  const handleOpenUsageDashboard = () => {
+    vscode.postMessage({ type: "openUsageDashboard" });
     onClose();
   };
 
@@ -139,6 +152,38 @@ function SettingsPanel({ onClose }) {
               </div>
             </div>
             <ExternalLink
+              size={14}
+              style={{ color: "var(--vscode-descriptionForeground)" }}
+            />
+          </button>
+
+          {/* Usage Dashboard Button */}
+          <button
+            onClick={handleOpenUsageDashboard}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border transition-all group"
+            style={{
+              borderColor: "var(--vscode-panel-border)",
+              backgroundColor: "var(--vscode-input-background)",
+            }}
+          >
+            <div className="w-10 h-10 rounded-lg bg-tinker-spark/20 flex items-center justify-center">
+              <BarChart2 size={18} className="text-tinker-spark" />
+            </div>
+            <div className="flex-1 text-left">
+              <div
+                className="text-sm font-medium"
+                style={{ color: "var(--vscode-foreground)" }}
+              >
+                Usage Analytics
+              </div>
+              <div
+                className="text-xs"
+                style={{ color: "var(--vscode-descriptionForeground)" }}
+              >
+                View token usage and costs across workspaces
+              </div>
+            </div>
+            <ChevronRight
               size={14}
               style={{ color: "var(--vscode-descriptionForeground)" }}
             />

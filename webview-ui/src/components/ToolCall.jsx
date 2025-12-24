@@ -10,6 +10,12 @@ import {
   Wrench,
   FolderTree,
   Info,
+  FolderPlus,
+  FilePlus,
+  Package,
+  GitBranch,
+  Play,
+  Settings,
 } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
@@ -34,6 +40,116 @@ const toolColors = {
   get_file_info: "text-cyan-400",
   run_command: "text-orange-400",
   default: "text-tinker-spark",
+};
+
+// Infer command type from command string
+const inferCommandType = (command) => {
+  if (!command)
+    return {
+      type: "command",
+      icon: Terminal,
+      color: "text-orange-400",
+      label: "Shell Command",
+    };
+  const cmd = command.toLowerCase().trim();
+
+  // Directory operations
+  if (/^mkdir\s/.test(cmd)) {
+    return {
+      type: "mkdir",
+      icon: FolderPlus,
+      color: "text-yellow-400",
+      label: "Create Directory",
+    };
+  }
+  // File operations
+  if (/^touch\s/.test(cmd)) {
+    return {
+      type: "touch",
+      icon: FilePlus,
+      color: "text-green-400",
+      label: "Create File",
+    };
+  }
+  // Package managers
+  if (/^(npm|yarn|pnpm|bun)\s/.test(cmd)) {
+    const action =
+      /\s(install|add|remove|init|run|build|dev|start|test)/.exec(cmd)?.[1] ||
+      "run";
+    return {
+      type: "npm",
+      icon: Package,
+      color: "text-red-400",
+      label: `npm ${action}`,
+    };
+  }
+  // Go
+  if (/^go\s/.test(cmd)) {
+    const action =
+      /^go\s+(mod|build|run|test|get|install)/.exec(cmd)?.[1] || "run";
+    return {
+      type: "go",
+      icon: Play,
+      color: "text-cyan-400",
+      label: `go ${action}`,
+    };
+  }
+  // Git
+  if (/^git\s/.test(cmd)) {
+    const action =
+      /^git\s+(init|clone|add|commit|push|pull|checkout|branch|merge|diff|log|status)/.exec(
+        cmd
+      )?.[1] || "command";
+    return {
+      type: "git",
+      icon: GitBranch,
+      color: "text-orange-500",
+      label: `git ${action}`,
+    };
+  }
+  // Python
+  if (/^(python3?|pip3?|uv|poetry|conda)\s/.test(cmd)) {
+    return {
+      type: "python",
+      icon: Play,
+      color: "text-yellow-400",
+      label: "Python",
+    };
+  }
+  // Docker
+  if (/^(docker|docker-compose|podman)\s/.test(cmd)) {
+    return {
+      type: "docker",
+      icon: Package,
+      color: "text-blue-400",
+      label: "Docker",
+    };
+  }
+  // Make/Build
+  if (/^(make|cmake|cargo|gradle|mvn)\s/.test(cmd)) {
+    return {
+      type: "build",
+      icon: Settings,
+      color: "text-purple-400",
+      label: "Build",
+    };
+  }
+  // ls/cat/grep etc
+  if (/^(ls|cat|grep|find|head|tail|wc|du|df)\s/.test(cmd)) {
+    return {
+      type: "inspect",
+      icon: Search,
+      color: "text-blue-400",
+      label: "Inspect",
+    };
+  }
+
+  return {
+    type: "command",
+    icon: Terminal,
+    color: "text-orange-400",
+    label: "Shell Command",
+  };
 };
 
 // Highlighted code display component for tool input/output
@@ -76,13 +192,63 @@ function HighlightedCode({ content, language = "json", maxHeight }) {
 
 function ToolCall({ tool, result }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const Icon = toolIcons[tool.name] || toolIcons.default;
-  const iconColor = toolColors[tool.name] || toolColors.default;
   const isCompleted = !!result;
+
+  // Map LLM-provided type enum to icon/color/label
+  const getInfoForLLMType = (type) => {
+    const mapping = {
+      create_directory: {
+        icon: FolderPlus,
+        color: "text-yellow-400",
+        label: "Create Directory",
+      },
+      create_file: {
+        icon: FilePlus,
+        color: "text-green-400",
+        label: "Create File",
+      },
+      package_manager: {
+        icon: Package,
+        color: "text-red-400",
+        label: "Package Manager",
+      },
+      git: { icon: GitBranch, color: "text-orange-500", label: "Git" },
+      build: { icon: Settings, color: "text-purple-400", label: "Build" },
+      test: { icon: Play, color: "text-green-400", label: "Test" },
+      inspect: { icon: Search, color: "text-blue-400", label: "Inspect" },
+      shell: {
+        icon: Terminal,
+        color: "text-orange-400",
+        label: "Shell Command",
+      },
+    };
+    return mapping[type] || null;
+  };
+
+  // For run_command: use LLM-provided type first, fallback to inference
+  const commandInfo = useMemo(() => {
+    if (tool.name === "run_command") {
+      // Try LLM-provided type first
+      if (tool.args?.type) {
+        const llmInfo = getInfoForLLMType(tool.args.type);
+        if (llmInfo) return llmInfo;
+      }
+      // Fallback to inference from command string
+      if (tool.args?.command) {
+        return inferCommandType(tool.args.command);
+      }
+    }
+    return null;
+  }, [tool.name, tool.args?.type, tool.args?.command]);
+
+  // Use inferred icon/color for run_command, otherwise use defaults
+  const Icon = commandInfo?.icon || toolIcons[tool.name] || toolIcons.default;
+  const iconColor =
+    commandInfo?.color || toolColors[tool.name] || toolColors.default;
 
   // Get reason from tool args, or fallback to tool name
   const reason = tool.args?.reason || tool.name.replace(/_/g, " ");
-  const displayName = tool.name.replace(/_/g, " ");
+  const displayName = commandInfo?.label || tool.name.replace(/_/g, " ");
 
   // Filter out reason from displayed args
   const filteredArgs = { ...tool.args };

@@ -24,6 +24,7 @@ class WorkspaceTools {
 
   /**
    * Execute a tool by name (with Zod validation)
+   * Returns { validationError: true, ... } if validation fails - caller can retry
    */
   async executeTool(toolName, args) {
     // Validate args with Zod
@@ -33,14 +34,43 @@ class WorkspaceTools {
         const validatedArgs = schema.parse(args);
         return await this._executeValidatedTool(toolName, validatedArgs);
       } catch (error) {
+        // Return structured validation error for retry logic
+        const zodErrors = error.errors || [];
+        const errorDetails = zodErrors.map((e) => ({
+          path: e.path.join("."),
+          message: e.message,
+          code: e.code,
+        }));
+
         return {
-          error: `Invalid arguments: ${error.message}`,
-          details: error.errors,
+          validationError: true,
+          toolName,
+          providedArgs: args,
+          error: `Invalid arguments for ${toolName}: ${error.message}`,
+          details: errorDetails,
+          hint: this._getValidationHint(toolName, errorDetails),
         };
       }
     }
 
     return await this._executeValidatedTool(toolName, args);
+  }
+
+  /**
+   * Get a helpful hint for fixing validation errors
+   */
+  _getValidationHint(toolName, errors) {
+    const hints = [];
+    for (const err of errors) {
+      if (err.code === "invalid_type") {
+        hints.push(`Field "${err.path}" has wrong type. ${err.message}`);
+      } else if (err.code === "invalid_enum_value") {
+        hints.push(`Field "${err.path}" has invalid value. ${err.message}`);
+      } else {
+        hints.push(`${err.path}: ${err.message}`);
+      }
+    }
+    return hints.join("; ");
   }
 
   async _executeValidatedTool(toolName, args) {

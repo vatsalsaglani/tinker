@@ -1,10 +1,14 @@
 const vscode = require("vscode");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 const LLMConnector = require("./llm-connector");
 const DiffApplier = require("./diff-applier");
 const ConversationStore = require("./conversation-store");
 const TitleGenerator = require("./title-generator");
 const TokenContextManager = require("./token-context-manager");
 const { WorkspaceTools } = require("../tools/workspace-tools");
+const { DEBUG_LOGGING_ENABLED, DEBUG_LOG_DIR } = require("../utils/constants");
 
 class ChatViewProvider {
   constructor(extensionUri, diffProvider) {
@@ -31,6 +35,58 @@ class ChatViewProvider {
     this._context = context;
     // Initialize storage with context (for globalState access)
     this.storage = new ConversationStore(context);
+  }
+
+  /**
+   * Write debug log to file (controlled by DEBUG_LOGGING_ENABLED constant)
+   */
+  writeDebugLog(prefix, data) {
+    if (!DEBUG_LOGGING_ENABLED) return;
+
+    try {
+      const debugDir = path.join(os.homedir(), DEBUG_LOG_DIR);
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `chat_${prefix}_${timestamp}.json`;
+      const filepath = path.join(debugDir, filename);
+
+      fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
+      this.log(`[DEBUG] Wrote log to: ${filepath}`);
+    } catch (error) {
+      this.log(`[DEBUG] Failed to write log file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Append to conversation trace log (running log for entire conversation)
+   * Logs tool calls and streaming output in order
+   */
+  appendConversationTrace(entry) {
+    if (!DEBUG_LOGGING_ENABLED) return;
+
+    try {
+      const debugDir = path.join(os.homedir(), DEBUG_LOG_DIR);
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+
+      // Use conversation ID or fallback to session timestamp
+      const conversationId = this.currentConversationId || "session";
+      const filename = `conversation_trace_${conversationId}.log`;
+      const filepath = path.join(debugDir, filename);
+
+      // Format entry with timestamp
+      const timestamp = new Date().toISOString();
+      const logEntry = `[${timestamp}] ${entry}\n`;
+
+      // Append to file
+      fs.appendFileSync(filepath, logEntry, "utf8");
+    } catch (error) {
+      this.log(`[DEBUG] Failed to append conversation trace: ${error.message}`);
+    }
   }
 
   /**
@@ -238,6 +294,12 @@ class ChatViewProvider {
         case "openConfigPanel":
           this.openConfigPanel();
           break;
+        case "openReviewPanel":
+          this.openReviewPanel(
+            data.pendingBlocks || [],
+            data.appliedBlocks || []
+          );
+          break;
 
         // Conversation management
         case "loadConversations":
@@ -257,6 +319,12 @@ class ChatViewProvider {
           break;
         case "loadMoreMessages":
           await this.handleLoadMoreMessages(data.beforeId);
+          break;
+        case "openUsageDashboard":
+          this.openUsageDashboard();
+          break;
+        case "loadUsageData":
+          await this.handleLoadUsageData();
           break;
       }
     });
@@ -678,6 +746,18 @@ class ChatViewProvider {
       thinking: true,
     });
 
+    // Declare outside try block so they're accessible in catch for error recovery
+    let fullResponse = "";
+    let turnToolCalls = [];
+    let accumulatedUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cachedTokens: 0,
+      totalTokens: 0,
+    };
+    let accumulatedCost = 0;
+
     try {
       // Get file tree for context
       const fileTree = await this.workspaceTools.getFileTree({
@@ -703,18 +783,6 @@ class ChatViewProvider {
 
       let currentTurn = 0;
       let totalToolCalls = 0;
-      let fullResponse = "";
-      let turnToolCalls = []; // Declare outside loop
-
-      // Token usage accumulation across all turns
-      let accumulatedUsage = {
-        inputTokens: 0,
-        outputTokens: 0,
-        reasoningTokens: 0,
-        cachedTokens: 0,
-        totalTokens: 0,
-      };
-      let accumulatedCost = 0;
 
       while (currentTurn < MAX_TURNS) {
         currentTurn++;
@@ -754,21 +822,96 @@ class ChatViewProvider {
         let turnResponse = "";
         turnToolCalls = []; // Reset for each turn
 
+        // Track retry attempts per tool call
+        const toolRetryCount = {};
+        const MAX_TOOL_RETRIES = 3;
+
         const handleToolCall = async (toolName, args, toolCallId) => {
           this.log(`[Tool Call] ${toolName}`, args);
           totalToolCalls++;
 
+          // Log tool call to conversation trace
+          this.appendConversationTrace(
+            `\n=== TOOL CALL #${totalToolCalls}: ${toolName} ===\n` +
+              `ID: ${toolCallId}\n` +
+              `Args: ${JSON.stringify(args, null, 2)}`
+          );
+
+          // Execute tool
+          const result = await this.workspaceTools.executeTool(toolName, args);
+
+          // Check for validation errors - don't show to UI, request retry from LLM
+          if (result.validationError) {
+            const retryKey = `${toolName}_${toolCallId}`;
+            toolRetryCount[retryKey] = (toolRetryCount[retryKey] || 0) + 1;
+
+            if (toolRetryCount[retryKey] <= MAX_TOOL_RETRIES) {
+              this.log(
+                `[Tool Validation Error] ${toolName} - Retry ${toolRetryCount[retryKey]}/${MAX_TOOL_RETRIES}`,
+                result.error
+              );
+
+              // Return error message that will be sent back to LLM for fixing
+              // The LLM will see this and can retry with corrected arguments
+              return {
+                error: result.error,
+                validationError: true,
+                hint: result.hint,
+                retryAttempt: toolRetryCount[retryKey],
+                instruction: `Please fix the tool call arguments and try again. ${result.hint}`,
+              };
+            } else {
+              // Max retries exceeded - show error to user
+              this.log(
+                `[Tool Validation Failed] ${toolName} - Max retries exceeded`
+              );
+
+              this._view.webview.postMessage({
+                type: "toolCall",
+                tool: { id: toolCallId, name: toolName, args },
+              });
+
+              this._view.webview.postMessage({
+                type: "toolResult",
+                tool: {
+                  id: toolCallId,
+                  result: {
+                    error: `Validation failed after ${MAX_TOOL_RETRIES} attempts: ${result.error}`,
+                  },
+                },
+              });
+
+              turnToolCalls.push({
+                toolName,
+                args,
+                result: { error: result.error },
+                toolCallId,
+              });
+              return result;
+            }
+          }
+
+          // Success - show to UI
           this._view.webview.postMessage({
             type: "toolCall",
             tool: { id: toolCallId, name: toolName, args },
           });
 
-          const result = await this.workspaceTools.executeTool(toolName, args);
-
           this._view.webview.postMessage({
             type: "toolResult",
             tool: { id: toolCallId, result },
           });
+
+          // Log result to conversation trace
+          const resultPreview =
+            typeof result === "string"
+              ? result.substring(0, 500)
+              : JSON.stringify(result, null, 2).substring(0, 500);
+          this.appendConversationTrace(
+            `Result: ${resultPreview}${
+              resultPreview.length >= 500 ? "...(truncated)" : ""
+            }\n`
+          );
 
           // Include toolCallId for proper Responses API format
           turnToolCalls.push({ toolName, args, result, toolCallId });
@@ -800,6 +943,11 @@ class ChatViewProvider {
             fullResponse += chunk;
             chunkBuffer += chunk;
 
+            // Log streaming output to trace (only substantial chunks to avoid spam)
+            if (chunk.length > 10) {
+              this.appendConversationTrace(`OUTPUT: ${chunk}`);
+            }
+
             // Only send to UI when buffer is full
             if (chunkBuffer.length >= CHUNK_BUFFER_SIZE) {
               flushBuffer();
@@ -811,7 +959,24 @@ class ChatViewProvider {
         // Flush any remaining buffer after stream completes
         flushBuffer();
 
-        // Log token usage if available
+        // Debug log: capture full turn data for debugging
+        const providerName =
+          this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+          "unknown";
+        const modelName =
+          this.llmConnector.getCurrentProvider()?.defaultModel || "unknown";
+
+        this.writeDebugLog(`turn_${currentTurn}`, {
+          provider: providerName,
+          model: modelName,
+          turn: currentTurn,
+          messagesCount: messages.length,
+          messages: messages, // Last 4 messages for context
+          turnResponse,
+          turnToolCalls,
+          streamResult,
+          timestamp: new Date().toISOString(),
+        });
         if (streamResult?.usage) {
           const providerName =
             this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
@@ -848,6 +1013,31 @@ class ChatViewProvider {
           if (cost?.totalCost) {
             accumulatedCost += cost.totalCost;
           }
+
+          // Send live usage update to UI after each turn
+          const providerNameForUpdate =
+            this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+            "openai";
+          const modelNameForUpdate =
+            this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o";
+          const liveContextStatus = this.tokenManager.getContextStatus(
+            this.tokenManager.getCumulativeTokens(),
+            providerNameForUpdate,
+            modelNameForUpdate
+          );
+
+          this._view.webview.postMessage({
+            type: "usageUpdate",
+            usage: {
+              inputTokens: accumulatedUsage.inputTokens,
+              outputTokens: accumulatedUsage.outputTokens,
+              reasoningTokens: accumulatedUsage.reasoningTokens,
+              cachedTokens: accumulatedUsage.cachedTokens,
+              totalTokens: accumulatedUsage.totalTokens,
+              cost: accumulatedCost,
+            },
+            contextStatus: liveContextStatus,
+          });
         }
 
         // Check if response was truncated due to token limit
@@ -1058,6 +1248,77 @@ class ChatViewProvider {
       }
     } catch (error) {
       this.log("[Error]", error);
+
+      // Save partial output if we have any content
+      if (fullResponse && fullResponse.length > 0) {
+        this.log("[Error Recovery] Saving partial output before error");
+
+        // Calculate context status for display
+        const providerName =
+          this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+          "openai";
+        const modelName =
+          this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o";
+        const contextStatus = this.tokenManager.getContextStatus(
+          this.tokenManager.getCumulativeTokens(),
+          providerName,
+          modelName
+        );
+
+        // Send partial output to UI
+        this._view.webview.postMessage({
+          type: "assistantComplete",
+          message: fullResponse,
+          blocks: [],
+          usage:
+            accumulatedUsage.totalTokens > 0
+              ? {
+                  inputTokens: accumulatedUsage.inputTokens,
+                  outputTokens: accumulatedUsage.outputTokens,
+                  reasoningTokens: accumulatedUsage.reasoningTokens,
+                  cachedTokens: accumulatedUsage.cachedTokens,
+                  totalTokens: accumulatedUsage.totalTokens,
+                  cost: accumulatedCost,
+                }
+              : null,
+          contextStatus: contextStatus,
+        });
+
+        // Persist partial message to storage
+        if (this.storage && this.currentConversationId) {
+          try {
+            const workspaceId = this.getWorkspaceId();
+            await this.storage.addMessage(
+              workspaceId,
+              this.currentConversationId,
+              {
+                role: "assistant",
+                content: fullResponse + "\n\n⚠️ *Message interrupted by error*",
+                provider: providerName,
+                model: modelName,
+                usage:
+                  accumulatedUsage.totalTokens > 0
+                    ? {
+                        inputTokens: accumulatedUsage.inputTokens,
+                        outputTokens: accumulatedUsage.outputTokens,
+                        reasoningTokens: accumulatedUsage.reasoningTokens,
+                        cachedTokens: accumulatedUsage.cachedTokens,
+                        totalTokens: accumulatedUsage.totalTokens,
+                        cost: accumulatedCost,
+                      }
+                    : null,
+              }
+            );
+            this.log("[Error Recovery] Partial message saved to storage");
+          } catch (saveErr) {
+            this.log(
+              "[Error Recovery] Failed to save partial message:",
+              saveErr
+            );
+          }
+        }
+      }
+
       if (error.message !== "Generation aborted") {
         this._view.webview.postMessage({
           type: "error",
@@ -1070,6 +1331,46 @@ class ChatViewProvider {
         thinking: false,
       });
       this.abortController = null;
+    }
+  }
+
+  /**
+   * Notify all panels that a block has been applied
+   * Updates both Sidebar, ReviewPanel, and persists to storage
+   */
+  async notifyBlockApplied(block, contentField = "content") {
+    const content = block[contentField] || block.content || block.replace || "";
+    const contentHash = content.slice(0, 50);
+    const blockKey = `${block.filePath}:${block.type}:${contentHash}`;
+
+    // Update internal state
+    if (this._appliedBlocks) {
+      this._appliedBlocks.add(blockKey);
+    }
+
+    // Notify Sidebar
+    if (this._view) {
+      this._view.webview.postMessage({
+        type: "blockApplied",
+        blockKey,
+      });
+    }
+
+    // Notify ReviewPanel if open
+    if (this._reviewPanel) {
+      this._reviewPanel.webview.postMessage({
+        type: "blockApplied",
+        blockKey,
+      });
+    }
+
+    // Persist to storage
+    if (this.currentConversationId) {
+      await this.storage.addAppliedBlock(
+        this.getWorkspaceId(),
+        this.currentConversationId,
+        blockKey
+      );
     }
   }
 
@@ -1131,14 +1432,9 @@ class ChatViewProvider {
       const doc = await vscode.workspace.openTextDocument(fullPath);
       await vscode.window.showTextDocument(doc);
 
-      // Send blockApplied message to webview
-      if (this._view && block) {
-        const contentHash = (block.content || "").slice(0, 50);
-        const blockKey = `${block.filePath}:${block.type}:${contentHash}`;
-        this._view.webview.postMessage({
-          type: "blockApplied",
-          blockKey,
-        });
+      // Notify all panels that block was applied
+      if (block) {
+        await this.notifyBlockApplied(block, "content");
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to create file: ${error.message}`);
@@ -1225,14 +1521,9 @@ class ChatViewProvider {
         const updatedDoc = await vscode.workspace.openTextDocument(fullPath);
         await vscode.window.showTextDocument(updatedDoc);
 
-        // Send blockApplied message to webview
-        if (this._view && block) {
-          const contentHash = (block.content || "").slice(0, 50);
-          const blockKey = `${block.filePath}:${block.type}:${contentHash}`;
-          this._view.webview.postMessage({
-            type: "blockApplied",
-            blockKey,
-          });
+        // Notify all panels that block was applied
+        if (block) {
+          await this.notifyBlockApplied(block, "content");
         }
       } else {
         // Rejected - close diff editor
@@ -1342,21 +1633,9 @@ class ChatViewProvider {
         "workbench.action.closeActiveEditor"
       );
 
-      // Notify webview that block was applied
-      // Use content hash for unique identification (matches frontend CodeBlock.jsx)
-      if (this._view) {
-        const contentHash = (
-          blockToApply.search ||
-          blockToApply.content ||
-          ""
-        ).slice(0, 50);
-        this._view.webview.postMessage({
-          type: "blockApplied",
-          filePath: blockToApply.filePath,
-          blockType: blockToApply.type,
-          contentHash: contentHash,
-        });
-      }
+      // Notify all panels that block was applied
+      // Use 'search' as content field for SEARCH/REPLACE blocks
+      await this.notifyBlockApplied(blockToApply, "search");
 
       vscode.window.showInformationMessage(
         `✓ Changes ${acceptAll ? "accepted" : "applied"} successfully`
@@ -1820,12 +2099,19 @@ class ChatViewProvider {
         conversationId
       );
 
+      // Get applied blocks for this conversation
+      const appliedBlocks = await this.storage.getAppliedBlocks(
+        workspaceId,
+        conversationId
+      );
+
       this._view.webview.postMessage({
         type: "messagesLoaded",
         messages,
         hasMore: hasMoreBefore,
         isAppend: !!beforeIndex,
         conversation,
+        appliedBlocks, // Include applied blocks
       });
 
       // Send persisted context status if available (for context gauge)
@@ -2231,6 +2517,125 @@ class ChatViewProvider {
   }
 
   /**
+   * Open review panel as editor panel
+   */
+  openReviewPanel(pendingBlocks = [], appliedBlocks = []) {
+    const column = vscode.ViewColumn.One;
+
+    // If panel already exists, update it and reveal
+    if (this._reviewPanel) {
+      this._reviewPanel.reveal(column);
+      this._reviewPanel.webview.postMessage({
+        type: "loadBlocks",
+        blocks: pendingBlocks,
+        appliedBlocks: appliedBlocks,
+      });
+      return;
+    }
+
+    // Create new panel
+    this._reviewPanel = vscode.window.createWebviewPanel(
+      "tinkerReview",
+      "Tinker: Review Changes",
+      column,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this._extensionUri, "webview-ui", "dist"),
+          vscode.Uri.joinPath(this._extensionUri, "media"),
+        ],
+      }
+    );
+
+    // Set panel icon
+    this._reviewPanel.iconPath = vscode.Uri.joinPath(
+      this._extensionUri,
+      "media",
+      "tinker-logo-v2.svg"
+    );
+
+    this._reviewPanel.webview.html = this._getReviewPanelHtml(
+      this._reviewPanel.webview
+    );
+
+    // Send initial blocks after panel loads
+    setTimeout(() => {
+      this._reviewPanel?.webview.postMessage({
+        type: "loadBlocks",
+        blocks: pendingBlocks,
+        appliedBlocks: appliedBlocks,
+      });
+    }, 100);
+
+    // Handle messages from review panel
+    this._reviewPanel.webview.onDidReceiveMessage(async (data) => {
+      switch (data.type) {
+        case "loadBlocks":
+          // Panel requests blocks - send current state
+          this._reviewPanel?.webview.postMessage({
+            type: "loadBlocks",
+            blocks: this._pendingBlocks || [],
+            appliedBlocks: Array.from(this._appliedBlocks || []),
+          });
+          break;
+        case "applyCodeBlock":
+          await this.applyCodeBlock(data.block);
+          break;
+        case "closePanel":
+          this._reviewPanel?.dispose();
+          break;
+      }
+    });
+
+    // Store blocks for refresh
+    this._pendingBlocks = pendingBlocks;
+    this._appliedBlocks = new Set(appliedBlocks);
+
+    // Clean up on close
+    this._reviewPanel.onDidDispose(() => {
+      this._reviewPanel = null;
+    });
+  }
+
+  /**
+   * Get HTML for review panel webview
+   */
+  _getReviewPanelHtml(webview) {
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        "webview-ui",
+        "dist",
+        "review-panel.js"
+      )
+    );
+
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        "webview-ui",
+        "dist",
+        "output.css"
+      )
+    );
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tinker: Review Changes</title>
+  <link rel="stylesheet" href="${styleUri}">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="${scriptUri}"></script>
+</body>
+</html>`;
+  }
+
+  /**
    * Get HTML for webview
    */
   _getHtmlForWebview(webview) {
@@ -2258,6 +2663,103 @@ class ChatViewProvider {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tinker Agent</title>
+  <link rel="stylesheet" href="${styleUri}">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="${scriptUri}"></script>
+</body>
+</html>`;
+  }
+  /**
+   * Open usage analytics dashboard in editor area
+   */
+  openUsageDashboard() {
+    const column = vscode.ViewColumn.One;
+
+    if (this._usagePanel) {
+      this._usagePanel.reveal(column);
+      return;
+    }
+
+    this._usagePanel = vscode.window.createWebviewPanel(
+      "tinkerUsage",
+      "Tinker Usage Analytics",
+      column,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this._extensionUri, "webview-ui", "dist"),
+        ],
+      }
+    );
+
+    this._usagePanel.webview.html = this._getUsageDashboardHtml(
+      this._usagePanel.webview
+    );
+
+    this._usagePanel.webview.onDidReceiveMessage(async (data) => {
+      if (data.type === "loadUsageData") {
+        await this.handleLoadUsageData();
+      }
+    });
+
+    this._usagePanel.onDidDispose(() => {
+      this._usagePanel = undefined;
+    });
+  }
+
+  /**
+   * Handle loading usage data for the dashboard
+   */
+  async handleLoadUsageData() {
+    if (!this.storage) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+      const stats = await this.storage.getAggregatedUsage(workspaceId);
+
+      this._usagePanel?.webview.postMessage({
+        type: "usageDataLoaded",
+        stats,
+      });
+    } catch (err) {
+      this.log("Error loading usage data:", err);
+    }
+  }
+
+  /**
+   * Get HTML for usage dashboard webview
+   */
+  _getUsageDashboardHtml(webview) {
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        "webview-ui",
+        "dist",
+        "usage-dashboard.js"
+      )
+    );
+
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        "webview-ui",
+        "dist",
+        "output.css"
+      )
+    );
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tinker Usage Analytics</title>
+  <style>
+    body { padding: 0; margin: 0; overflow: hidden; background-color: var(--vscode-editor-backgroundColor); }
+  </style>
   <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>

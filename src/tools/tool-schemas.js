@@ -75,10 +75,27 @@ const getFileInfoSchema = z.object({
   file_path: z.string().describe("Path to the file relative to workspace root"),
 });
 
+// Command type enum for better UI display
+const commandTypeEnum = z.enum([
+  "create_directory", // mkdir, md
+  "create_file", // touch, new file
+  "package_manager", // npm, yarn, pnpm, pip, go mod
+  "git", // git commands
+  "build", // make, cargo, gradle, mvn
+  "test", // npm test, go test, pytest
+  "inspect", // ls, cat, grep, find
+  "shell", // generic shell command
+]);
+
 // Run Command Schema
 const runCommandSchema = z.object({
   reason: reasonField,
   command: z.string().describe("The shell command to execute"),
+  type: commandTypeEnum
+    .optional()
+    .describe(
+      "The type of command: create_directory, create_file, package_manager, git, build, test, inspect, or shell"
+    ),
   cwd: z
     .string()
     .optional()
