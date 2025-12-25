@@ -104,6 +104,27 @@ function activate(context) {
     })
   );
 
+  // Command: New conversation
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tinker.newConversation", async () => {
+      await chatProvider.createNewConversation();
+    })
+  );
+
+  // Command: Show conversations
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tinker.showConversations", () => {
+      chatProvider.showConversations();
+    })
+  );
+
+  // Command: Show settings
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tinker.showSettings", () => {
+      chatProvider.showSettings();
+    })
+  );
+
   console.log("✅ Tinker extension activated successfully");
 }
 

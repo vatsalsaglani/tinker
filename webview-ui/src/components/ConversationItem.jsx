@@ -16,8 +16,14 @@ function ConversationItem({
 
   // Format relative date
   const getRelativeDate = (timestamp) => {
+    // Handle both ISO string and timestamp number formats
+    const date =
+      typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp;
+
+    if (!date || isNaN(date)) return "Just now";
+
     const now = Date.now();
-    const diff = now - timestamp;
+    const diff = now - date;
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);

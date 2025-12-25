@@ -11,17 +11,16 @@ import ImageAttachments from "./components/ImageAttachments";
 import Dropdown from "./components/Dropdown";
 import ContextGauge from "./components/ContextGauge";
 import ReviewBar from "./components/ReviewBar";
+import LandingExperience from "./components/LandingExperience";
 import { useVSCodeMessage } from "./hooks/useVSCodeMessage";
 import { useChat } from "./hooks/useChat";
 import { useAutocomplete } from "./hooks/useAutocomplete";
 import {
   Send,
-  Settings,
   StopCircle,
   ImagePlus,
   Loader2,
   Square,
-  MessageSquare,
   ArrowDown,
 } from "lucide-react";
 import {
@@ -99,6 +98,7 @@ function Sidebar() {
   const [appliedBlocks, setAppliedBlocks] = useState(new Set());
   const [attachedImages, setAttachedImages] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [landingState, setLandingState] = useState(null);
   const fileInputRef = useRef(null);
 
   // Aggregate all pending code blocks from messages
@@ -170,13 +170,20 @@ function Sidebar() {
     } else if (message.type === "messagesLoaded" && message.appliedBlocks) {
       // Load persisted applied blocks when switching conversations
       setAppliedBlocks(new Set(message.appliedBlocks));
+    } else if (message.type === "landingStateLoaded") {
+      setLandingState(message.state);
+    } else if (message.type === "showConversations") {
+      setShowConversations(true);
+    } else if (message.type === "openSettings") {
+      setShowSettings(true);
     }
   });
 
-  // Load settings on mount
+  // Load settings and landing state on mount
   useEffect(() => {
     vscode.postMessage({ type: "loadSettings" });
     vscode.postMessage({ type: "loadCustomModels" });
+    vscode.postMessage({ type: "getLandingState" });
   }, []);
 
   // Update handlers
@@ -465,79 +472,80 @@ function Sidebar() {
         onClose={() => setShowConversations(false)}
       />
 
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-[var(--vscode-panel-border)]">
-        <h3 className="font-semibold">Tinker Agent</h3>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowConversations(!showConversations)}
-            className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-            title="Conversations"
-          >
-            <MessageSquare size={16} />
-          </button>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-            title="Settings"
-          >
-            <Settings size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* Messages */}
       <div
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 relative"
         onScroll={handleMessagesScroll}
       >
-        {/* Load more button */}
-        {hasMoreMessages && (
-          <button
-            onClick={loadMoreMessages}
-            className="w-full mb-3 py-1.5 text-xs text-center rounded-lg transition-colors"
-            style={{
-              backgroundColor: "var(--vscode-input-background)",
-              color: "var(--vscode-descriptionForeground)",
-              border: "1px solid var(--vscode-panel-border)",
+        {/* Show landing experience when no messages */}
+        {messages.length === 0 && !isGenerating ? (
+          <LandingExperience
+            landingState={landingState}
+            onQuickStart={(prompt) => {
+              setInputValue(prompt);
+              inputRef.current?.focus();
             }}
-          >
-            Load earlier messages ({effectiveStartIndex} more)
-          </button>
-        )}
-
-        {visibleMessages.map((msg, idx) => {
-          const actualIndex = effectiveStartIndex + idx;
-          return (
-            <ChatMessage
-              key={actualIndex}
-              message={msg}
-              appliedBlocks={appliedBlocks}
-              isLatest={actualIndex === messages.length - 1}
-              isGenerating={
-                isThinking &&
-                actualIndex === messages.length - 1 &&
-                msg.role === "assistant"
-              }
-            />
-          );
-        })}
-        <div ref={messagesEndRef} />
-
-        {/* Floating scroll-to-bottom button */}
-        {isUserScrolledUp && isGenerating && (
-          <button
-            onClick={scrollToBottom}
-            className="fixed bottom-28 right-6 z-50 p-2 rounded-full shadow-lg transition-all hover:scale-110"
-            style={{
-              backgroundColor: "var(--vscode-button-background)",
-              color: "var(--vscode-button-foreground)",
+            onOpenSettings={() => setShowSettings(true)}
+            onOpenAnalytics={() =>
+              vscode.postMessage({ type: "openUsageDashboard" })
+            }
+            onContinueConversation={(convId) => {
+              vscode.postMessage({
+                type: "switchConversation",
+                conversationId: convId,
+              });
             }}
-            title="Scroll to bottom"
-          >
-            <ArrowDown size={18} />
-          </button>
+          />
+        ) : (
+          <>
+            {/* Load more button */}
+            {hasMoreMessages && (
+              <button
+                onClick={loadMoreMessages}
+                className="w-full mb-3 py-1.5 text-xs text-center rounded-lg transition-colors"
+                style={{
+                  backgroundColor: "var(--vscode-input-background)",
+                  color: "var(--vscode-descriptionForeground)",
+                  border: "1px solid var(--vscode-panel-border)",
+                }}
+              >
+                Load earlier messages ({effectiveStartIndex} more)
+              </button>
+            )}
+
+            {visibleMessages.map((msg, idx) => {
+              const actualIndex = effectiveStartIndex + idx;
+              return (
+                <ChatMessage
+                  key={actualIndex}
+                  message={msg}
+                  appliedBlocks={appliedBlocks}
+                  isLatest={actualIndex === messages.length - 1}
+                  isGenerating={
+                    isThinking &&
+                    actualIndex === messages.length - 1 &&
+                    msg.role === "assistant"
+                  }
+                />
+              );
+            })}
+            <div ref={messagesEndRef} />
+
+            {/* Floating scroll-to-bottom button */}
+            {isUserScrolledUp && isGenerating && (
+              <button
+                onClick={scrollToBottom}
+                className="fixed bottom-28 right-6 z-50 p-2 rounded-full shadow-lg transition-all hover:scale-110"
+                style={{
+                  backgroundColor: "var(--vscode-button-background)",
+                  color: "var(--vscode-button-foreground)",
+                }}
+                title="Scroll to bottom"
+              >
+                <ArrowDown size={18} />
+              </button>
+            )}
+          </>
         )}
       </div>
 

@@ -805,6 +805,46 @@ class ConversationStore {
     const key = this.getGlobalStatsKey();
     return this.context.globalState.get(key, null);
   }
+
+  /**
+   * Get user statistics for landing experience
+   * @param {string} workspaceId - Workspace ID
+   * @returns {Object} User stats including total conversations, messages, first/last use dates
+   */
+  async getUserStats(workspaceId) {
+    const conversations = await this.getAll(workspaceId);
+    const globalStats = await this.getGlobalStats();
+
+    let firstUseDate = null;
+    let lastUseDate = null;
+    let totalMessages = 0;
+
+    // Calculate from conversations
+    for (const conv of conversations) {
+      if (conv.createdAt) {
+        const created = new Date(conv.createdAt);
+        if (!firstUseDate || created < new Date(firstUseDate)) {
+          firstUseDate = conv.createdAt;
+        }
+      }
+      if (conv.updatedAt) {
+        const updated = new Date(conv.updatedAt);
+        if (!lastUseDate || updated > new Date(lastUseDate)) {
+          lastUseDate = conv.updatedAt;
+        }
+      }
+      totalMessages += conv.messages?.length || 0;
+    }
+
+    return {
+      totalConversations: conversations.length,
+      totalMessages: globalStats?.messageCount || totalMessages,
+      firstUseDate,
+      lastUseDate,
+      totalTokens: globalStats?.totalTokens || 0,
+      totalCost: globalStats?.totalCost || 0,
+    };
+  }
 }
 
 module.exports = ConversationStore;

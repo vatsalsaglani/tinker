@@ -72,6 +72,14 @@ API keys and AWS credentials are stored securely in VS Code's encrypted secret s
 
 See [full changelog](#release-notes) for all versions.
 
+### 0.0.7
+
+- 🎛️ **VS Code Title Bar Integration** - Moved conversation controls (New, List, Settings) to native VS Code title bar for better integration and more screen space
+- 🔄 **Smart Conversation Management** - Intelligent conversation reuse prevents duplicate empty "New Chat" entries; automatically cleans up excess empty conversations
+- 🐛 **Critical Bug Fixes** - Fixed conversation switching, message loading, and timestamp display issues
+- ⚡ **Landing Experience** - Resolved "Just now" timestamp bug and improved navigation between conversations
+- 🧹 **UI Cleanup** - Removed redundant custom header from sidebar, freeing up valuable screen real estate
+
 ### 0.0.6
 
 - 📊 **Usage Analytics Dashboard** - Premium dashboard with charts to track token usage and costs across all workspaces

@@ -2,7 +2,7 @@
   "name": "tinker",
   "displayName": "Tinker",
   "description": "Open-source Coding Agent - BYOK",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "author": "vatsalsaglani",
   "publisher": "vatsalsaglani",
   "icon": "media/tinker-logo-v2.png",
@@ -77,12 +77,47 @@
         "icon": "$(check-all)"
       },
       {
+        "command": "tinker.newConversation",
+        "title": "New Conversation",
+        "category": "Tinker",
+        "icon": "$(add)"
+      },
+      {
+        "command": "tinker.showConversations",
+        "title": "Show Conversations",
+        "category": "Tinker",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "tinker.showSettings",
+        "title": "Show Settings",
+        "category": "Tinker",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "tinker.openConfigPanel",
         "title": "Tinker: Configure API Keys & Models",
         "category": "Tinker"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "tinker.newConversation",
+          "when": "view == tinker-sidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tinker.showConversations",
+          "when": "view == tinker-sidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "tinker.showSettings",
+          "when": "view == tinker-sidebar",
+          "group": "navigation@3"
+        }
+      ],
       "editor/title": [
         {
           "command": "tinker.acceptChange",

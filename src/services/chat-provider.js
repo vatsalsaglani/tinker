@@ -326,6 +326,9 @@ class ChatViewProvider {
         case "loadUsageData":
           await this.handleLoadUsageData();
           break;
+        case "getLandingState":
+          await this.handleGetLandingState();
+          break;
       }
     });
 
@@ -567,6 +570,40 @@ class ChatViewProvider {
    * Open settings panel
    */
   openSettings() {
+    if (this._view) {
+      this._view.webview.postMessage({
+        type: "openSettings",
+      });
+      this._view.show?.(true);
+    }
+  }
+
+  /**
+   * Create new conversation (from title bar button)
+   */
+  async createNewConversation() {
+    if (this._view) {
+      this._view.show?.(true);
+      await this.handleCreateConversation();
+    }
+  }
+
+  /**
+   * Show conversations list (from title bar button)
+   */
+  showConversations() {
+    if (this._view) {
+      this._view.webview.postMessage({
+        type: "showConversations",
+      });
+      this._view.show?.(true);
+    }
+  }
+
+  /**
+   * Show settings panel (from title bar button)
+   */
+  showSettings() {
     if (this._view) {
       this._view.webview.postMessage({
         type: "openSettings",
@@ -1997,18 +2034,62 @@ class ChatViewProvider {
   }
 
   /**
-   * Handle loading conversations list
+   * Handle loading all conversations
    */
   async handleLoadConversations() {
     if (!this._view || !this.storage) return;
 
     try {
       const workspaceId = this.getWorkspaceId();
-      const { conversations } = await this.storage.getConversations(
+      let { conversations } = await this.storage.getConversations(
         workspaceId,
         0,
         50
       );
+
+      // Clean up: Keep only one empty "New Chat" conversation (the most recent).
+      // Actually verify by checking stored messages, not just messageCount.
+      let foundEmptyNewChat = false;
+      const cleanedConversations = [];
+      const emptyToDelete = [];
+
+      for (const conv of conversations) {
+        // Check if it's a default-titled chat that might be empty
+        const isDefaultTitle = conv.title === "New Chat" || !conv.title;
+
+        if (isDefaultTitle) {
+          // Actually verify by checking messages in storage
+          const result = await this.storage.getMessages(workspaceId, conv.id);
+          const actuallyEmpty = (result?.totalMessages || 0) === 0;
+
+          if (actuallyEmpty) {
+            if (!foundEmptyNewChat) {
+              // Keep the first (most recent) empty one
+              foundEmptyNewChat = true;
+              cleanedConversations.push(conv);
+            } else {
+              // Mark others for deletion
+              emptyToDelete.push(conv.id);
+            }
+          } else {
+            // Has messages despite looking empty, keep it
+            cleanedConversations.push(conv);
+          }
+        } else {
+          cleanedConversations.push(conv);
+        }
+      }
+
+      // Delete excess empty conversations
+      for (const id of emptyToDelete) {
+        await this.storage.deleteConversation(workspaceId, id).catch(() => {});
+      }
+
+      if (emptyToDelete.length > 0) {
+        this.log(`Cleaned up ${emptyToDelete.length} empty conversations`);
+      }
+
+      conversations = cleanedConversations;
 
       // Get or create default conversation if none exist
       if (conversations.length === 0) {
@@ -2157,12 +2238,74 @@ class ChatViewProvider {
 
   /**
    * Handle creating a new conversation
+   * - If current conversation is already empty, just stay there
+   * - If there's another empty "New Chat" conversation, switch to it
+   * - Otherwise create a new one
    */
   async handleCreateConversation() {
     if (!this._view || !this.storage) return;
 
     try {
       const workspaceId = this.getWorkspaceId();
+      this.log(
+        `[NewConversation] Starting. Current: ${this.currentConversationId}`
+      );
+
+      // Get all conversations to find an empty one to reuse
+      const { conversations } = await this.storage.getConversations(
+        workspaceId,
+        0,
+        50
+      );
+
+      // First, check if current conversation is empty - if so, just stay there
+      if (this.currentConversationId) {
+        const currentConv = conversations.find(
+          (c) => c.id === this.currentConversationId
+        );
+        if (currentConv) {
+          const result = await this.storage.getMessages(
+            workspaceId,
+            this.currentConversationId
+          );
+          const messageCount = result?.totalMessages || 0;
+          this.log(`[NewConversation] Current has ${messageCount} messages`);
+
+          if (messageCount === 0) {
+            this.log(`[NewConversation] Staying on current empty conversation`);
+            this.conversationHistory = [];
+            this._view.webview.postMessage({
+              type: "messagesLoaded",
+              messages: [],
+              hasMore: false,
+              isAppend: false,
+            });
+            return;
+          }
+        }
+      }
+
+      // Look for any existing empty conversation to reuse
+      for (const conv of conversations) {
+        if (conv.id !== this.currentConversationId) {
+          const isDefaultTitle = conv.title === "New Chat" || !conv.title;
+          if (isDefaultTitle) {
+            const result = await this.storage.getMessages(workspaceId, conv.id);
+            const msgCount = result?.totalMessages || 0;
+            if (msgCount === 0) {
+              // Found an empty conversation - switch to it properly
+              this.log(
+                `[NewConversation] Switching to existing empty conv: ${conv.id}`
+              );
+              await this.handleSwitchConversation(conv.id);
+              return;
+            }
+          }
+        }
+      }
+
+      // No empty conversation found - create a new one
+      this.log(`[NewConversation] Creating new conversation`);
       const conversation = await this.storage.createConversation(workspaceId);
 
       this.currentConversationId = conversation.id;
@@ -2173,7 +2316,6 @@ class ChatViewProvider {
         conversation,
       });
 
-      // Clear messages in UI
       this._view.webview.postMessage({
         type: "messagesLoaded",
         messages: [],
@@ -2767,6 +2909,180 @@ class ChatViewProvider {
   <script src="${scriptUri}"></script>
 </body>
 </html>`;
+  }
+
+  /**
+   * Handle getting landing state for personalized experience
+   */
+  async handleGetLandingState() {
+    if (!this._view) return;
+
+    try {
+      const workspaceId = this.getWorkspaceId();
+
+      // Check configuration state - which providers have API keys?
+      const configuredProviders = [];
+      const providers = ["openai", "anthropic", "gemini", "azure"];
+
+      for (const provider of providers) {
+        try {
+          // Use getSecret helper which has globalState fallback
+          const key = await this.getSecret(`${provider}_apiKey`);
+          if (key) {
+            configuredProviders.push(provider);
+          }
+        } catch (e) {
+          // Ignore - provider not configured
+        }
+      }
+
+      // Check AWS credentials for Bedrock separately
+      try {
+        const accessKey = await this.getSecret("bedrock_awsAccessKey");
+        if (accessKey) {
+          configuredProviders.push("bedrock");
+        }
+      } catch (e) {
+        // Ignore
+      }
+
+      const hasAnyApiKey = configuredProviders.length > 0;
+
+      // Get usage statistics
+      const userStats = (await this.storage?.getUserStats?.(workspaceId)) || {
+        totalConversations: 0,
+        totalMessages: 0,
+        firstUseDate: null,
+        lastUseDate: null,
+      };
+
+      // Get conversations to check for pending work
+      const conversations = (await this.storage?.getAll?.(workspaceId)) || [];
+      const lastConversation =
+        conversations.length > 0 ? conversations[0] : null;
+
+      // Calculate time since last use
+      const now = new Date();
+      const currentHour = now.getHours();
+      let hoursSinceLastUse = 0;
+      let daysSinceLastUse = 0;
+
+      if (userStats.lastUseDate) {
+        const lastUse = new Date(userStats.lastUseDate);
+        hoursSinceLastUse = Math.floor(
+          (now.getTime() - lastUse.getTime()) / (1000 * 60 * 60)
+        );
+        daysSinceLastUse = Math.floor(hoursSinceLastUse / 24);
+      }
+
+      // Get workspace context
+      let workspaceContext = {
+        openFiles: [],
+        gitBranch: null,
+        uncommittedChanges: false,
+        workspaceName: null,
+      };
+
+      if (vscode.workspace.workspaceFolders?.length > 0) {
+        workspaceContext.workspaceName =
+          vscode.workspace.workspaceFolders[0].name;
+      }
+
+      // Get open files
+      const openEditors = vscode.window.visibleTextEditors;
+      workspaceContext.openFiles = openEditors
+        .map((editor) => {
+          const path = editor.document.uri.fsPath;
+          const parts = path.split(/[\\/]/);
+          return parts[parts.length - 1]; // Just filename
+        })
+        .filter(Boolean)
+        .slice(0, 5); // Limit to 5 files
+
+      // Check for pending code blocks in current conversation
+      let pendingBlocks = 0;
+      if (this.currentConversationId && this.storage) {
+        const messages = await this.storage.getMessages(
+          workspaceId,
+          this.currentConversationId
+        );
+        const appliedBlocks =
+          (await this.storage.getAppliedBlocks?.(
+            workspaceId,
+            this.currentConversationId
+          )) || [];
+        const appliedSet = new Set(appliedBlocks);
+
+        for (const msg of messages) {
+          if (msg.codeBlocks) {
+            for (const block of msg.codeBlocks) {
+              const contentHash = (block.content || block.search || "").slice(
+                0,
+                50
+              );
+              const blockKey = `${block.filePath}:${block.type}:${contentHash}`;
+              if (!appliedSet.has(blockKey)) {
+                pendingBlocks++;
+              }
+            }
+          }
+        }
+      }
+
+      // Build landing state
+      const landingState = {
+        configState: {
+          hasAnyApiKey,
+          configuredProviders,
+        },
+        usageState: {
+          totalConversations:
+            userStats.totalConversations || conversations.length,
+          totalMessages: userStats.totalMessages || 0,
+          firstUseDate: userStats.firstUseDate,
+          lastUseDate: userStats.lastUseDate,
+        },
+        sessionState: {
+          hoursSinceLastUse,
+          daysSinceLastUse,
+          currentHour,
+        },
+        workState: {
+          pendingBlocks,
+          lastConversation: lastConversation
+            ? {
+                id: lastConversation.id,
+                title: lastConversation.title,
+                messageCount: lastConversation.messages?.length || 0,
+                updatedAt: lastConversation.updatedAt,
+              }
+            : null,
+        },
+        workspaceContext,
+      };
+
+      this._view.webview.postMessage({
+        type: "landingStateLoaded",
+        state: landingState,
+      });
+    } catch (err) {
+      this.log("Error getting landing state:", err);
+      // Send empty state on error
+      this._view.webview.postMessage({
+        type: "landingStateLoaded",
+        state: {
+          configState: { hasAnyApiKey: false, configuredProviders: [] },
+          usageState: { totalConversations: 0, totalMessages: 0 },
+          sessionState: {
+            hoursSinceLastUse: 0,
+            daysSinceLastUse: 0,
+            currentHour: new Date().getHours(),
+          },
+          workState: { pendingBlocks: 0, lastConversation: null },
+          workspaceContext: { openFiles: [], workspaceName: null },
+        },
+      });
+    }
   }
 }
 
