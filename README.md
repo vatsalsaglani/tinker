@@ -11,9 +11,11 @@
 - 💬 **Chat Interface** - Modern chat UI with markdown and syntax-highlighted code blocks
 - 📁 **Context-Aware** - Add files and symbols to your prompts with `#` and `@`
 - 🖼️ **Image Support** - Drag & drop or paste images for vision models
-- 🔧 **Tool Integration** - File operations, code search, and more
+- 🔧 **Tool Integration** - File operations, diagnostics, symbol navigation, git status, and command execution
 - 🎨 **Theme Support** - Works with both light and dark VS Code themes
 - ⚡ **Responses API** - Optional support for OpenAI's Responses API
+- 🔌 **MCP Integration (v1)** - Workspace-scoped MCP servers with stdio + HTTP/SSE support
+- 🧾 **Unified Logging** - Extension + UI logs in a single `Tinker` Output channel
 - 🌐 **VS Code Fork Compatible** - Works with Cursor, Kiro, Antigravity, and other forks
 
 ## Supported Providers
@@ -53,11 +55,36 @@ For Bedrock, you'll need AWS credentials instead of an API key:
 
 This extension contributes the following settings:
 
-* `tinker.provider` - Active AI provider (openai, anthropic, gemini, azure, bedrock)
-* `tinker.model` - Selected model for the active provider
-* `tinker.customModels` - Custom models per provider
-* `tinker.azureEndpoint` - Azure OpenAI endpoint URL
-* `tinker.awsRegion` - AWS region for Bedrock
+* `tinkerAssistant.provider` - Active AI provider (openai, anthropic, gemini, azure, bedrock)
+* `tinkerAssistant.model` - Selected model for the active provider
+* `tinkerAssistant.useResponsesAPI` - Use OpenAI Responses API instead of Chat Completions
+* `tinkerAssistant.azureEndpoint` - Azure OpenAI endpoint URL
+* `tinkerAssistant.awsRegion` - AWS region for Bedrock
+* `tinkerAssistant.logLevel` - Output log verbosity (`error`, `warn`, `info`, `debug`)
+* `tinkerAssistant.revealLogsOnError` - Auto-open Output channel when an error is logged
+* `tinkerAssistant.mcp.enabled` - Enable MCP tools for the current workspace
+* `tinkerAssistant.mcp.servers` - MCP server definitions (workspace-scoped)
+* `tinkerAssistant.customModels` - Custom models per provider (except Bedrock)
+* `tinkerAssistant.bedrockModels` - Bedrock model display name to model ID mappings
+
+## MCP Integration
+
+- Open MCP configuration from Quick Settings or command palette: `Tinker: Open MCP Configuration`
+- MCP is **off by default**; enable it with the `MCP` toggle in the chat input area
+- Configure MCP servers per workspace (stdio or HTTP/SSE)
+- MCP panel includes **General**, **Advanced**, and **Tools** sections:
+- General: transport, command/url, timeout, env/header secrets
+- Advanced: writable tool policy and allowlist
+- Tools: connection testing and discovered tool list
+- Secret values (env/header credentials) are stored in VS Code secret storage; only secret refs are stored in settings
+- Read-only MCP tools are exposed by default. Writable tools require explicit enablement (`allowWriteTools`) and optional allowlisting
+- For stdio servers, put executable in `Command` and packages/flags in `Args` (example: `Command = npx`, `Args = -y @playwright/mcp@latest`)
+
+## Logging
+
+- Open logs in VS Code Output: `View -> Output` and select `Tinker`
+- Command palette: `Tinker: Show Logs` (`tinker.showLogs`)
+- UI and backend logs are unified in the same channel
 
 ## Requirements
 
@@ -71,6 +98,17 @@ API keys and AWS credentials are stored securely in VS Code's encrypted secret s
 ## Release Notes
 
 See [full changelog](#release-notes) for all versions.
+
+### 0.0.8
+
+- 🔌 **MCP Client Integration v1** - Added provider-agnostic MCP tool bridge with workspace-scoped server config, stdio + HTTP/SSE transport support, and safe read-only-by-default tool exposure
+- 🪟 **MCP Configuration Panel** - New dedicated MCP panel with server management, connection testing, tool refresh, and tabbed server details (General/Advanced/Tools)
+- 🎛️ **MCP Toggle in Chat** - Added quick MCP ON/OFF toggle in sidebar input area plus quick entry from Settings modal
+- 🧰 **Tooling Expansion** - Added VS Code-native tools for diagnostics, symbols, file outline, go-to-definition, references, and git status to improve code navigation and debugging
+- 🧾 **Unified Production Logging** - UI + backend logs now flow into one `Tinker` Output channel with configurable verbosity and optional auto-reveal on errors
+- 🛑 **Generation Stop Reliability** - Fixed stop behavior so stream/tool activity halts consistently and partial output is preserved
+- 💾 **Abort Persistence Fix** - Partial assistant text/tool calls are now finalized and saved to conversation history when generation is stopped mid-response
+- 🧹 **Config/Docs Alignment** - Bedrock and settings documentation/schema updates were aligned with current implementation
 
 ### 0.0.7
 

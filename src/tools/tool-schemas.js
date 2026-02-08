@@ -75,6 +75,86 @@ const getFileInfoSchema = z.object({
   file_path: z.string().describe("Path to the file relative to workspace root"),
 });
 
+// Get Diagnostics Schema
+const getDiagnosticsSchema = z.object({
+  reason: reasonField,
+  file_path: z
+    .string()
+    .optional()
+    .describe("Optional file path relative to workspace root"),
+  severity: z
+    .enum(["error", "warning", "info", "hint"])
+    .optional()
+    .describe("Optional severity filter"),
+  max_results: z
+    .number()
+    .default(100)
+    .describe("Maximum number of diagnostics to return"),
+});
+
+// Find Symbols Schema
+const findSymbolsSchema = z.object({
+  reason: reasonField,
+  query: z.string().describe("Symbol query text"),
+  max_results: z
+    .number()
+    .default(50)
+    .describe("Maximum number of symbols to return"),
+});
+
+// Get File Outline Schema
+const getFileOutlineSchema = z.object({
+  reason: reasonField,
+  file_path: z.string().describe("Path to file relative to workspace root"),
+  max_depth: z
+    .number()
+    .default(8)
+    .describe("Maximum symbol tree depth to include"),
+});
+
+// Go To Definition Schema
+const goToDefinitionSchema = z.object({
+  reason: reasonField,
+  file_path: z.string().describe("Path to file relative to workspace root"),
+  line: z.number().describe("1-indexed line number"),
+  character: z
+    .number()
+    .default(1)
+    .describe("1-indexed character position"),
+  max_results: z
+    .number()
+    .default(20)
+    .describe("Maximum number of definitions to return"),
+});
+
+// Find References Schema
+const findReferencesSchema = z.object({
+  reason: reasonField,
+  file_path: z.string().describe("Path to file relative to workspace root"),
+  line: z.number().describe("1-indexed line number"),
+  character: z
+    .number()
+    .default(1)
+    .describe("1-indexed character position"),
+  include_declaration: z
+    .boolean()
+    .default(false)
+    .describe("Whether to include symbol declaration in results"),
+  max_results: z
+    .number()
+    .default(100)
+    .describe("Maximum number of references to return"),
+});
+
+// Get Git Status Schema
+const getGitStatusSchema = z.object({
+  reason: reasonField,
+  include_diff_stat: z
+    .boolean()
+    .default(false)
+    .describe("Whether to include git diff --stat output"),
+});
+
 // Command type enum for better UI display
 const commandTypeEnum = z.enum([
   "create_directory", // mkdir, md
@@ -237,6 +317,36 @@ const toolDefinitions = [
     getFileInfoSchema
   ),
   zodToOpenAIFunction(
+    "get_diagnostics",
+    "Get diagnostics (errors/warnings/info) from VS Code language services for a file or workspace.",
+    getDiagnosticsSchema
+  ),
+  zodToOpenAIFunction(
+    "find_symbols",
+    "Find workspace symbols using VS Code symbol index.",
+    findSymbolsSchema
+  ),
+  zodToOpenAIFunction(
+    "get_file_outline",
+    "Get symbol outline for a file (classes, functions, methods, etc.).",
+    getFileOutlineSchema
+  ),
+  zodToOpenAIFunction(
+    "go_to_definition",
+    "Find symbol definitions at a specific file position.",
+    goToDefinitionSchema
+  ),
+  zodToOpenAIFunction(
+    "find_references",
+    "Find references to a symbol at a specific file position.",
+    findReferencesSchema
+  ),
+  zodToOpenAIFunction(
+    "get_git_status",
+    "Get git branch/status summary for the current workspace.",
+    getGitStatusSchema
+  ),
+  zodToOpenAIFunction(
     "run_command",
     "Execute a shell command and return its output. Use for git, npm, build tools, etc. Avoid destructive commands.",
     runCommandSchema
@@ -251,6 +361,12 @@ const toolSchemas = {
   get_file_tree: getFileTreeSchema,
   list_files: listFilesSchema,
   get_file_info: getFileInfoSchema,
+  get_diagnostics: getDiagnosticsSchema,
+  find_symbols: findSymbolsSchema,
+  get_file_outline: getFileOutlineSchema,
+  go_to_definition: goToDefinitionSchema,
+  find_references: findReferencesSchema,
+  get_git_status: getGitStatusSchema,
   run_command: runCommandSchema,
 };
 

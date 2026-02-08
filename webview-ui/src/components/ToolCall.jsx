@@ -152,6 +152,20 @@ const inferCommandType = (command) => {
   };
 };
 
+const parseMcpToolName = (name) => {
+  if (typeof name !== "string" || !name.startsWith("mcp__")) {
+    return null;
+  }
+  const parts = name.split("__");
+  if (parts.length < 3) {
+    return null;
+  }
+  return {
+    alias: parts[1],
+    tool: parts.slice(2).join("__"),
+  };
+};
+
 // Highlighted code display component for tool input/output
 function HighlightedCode({ content, language = "json", maxHeight }) {
   const highlighted = useMemo(() => {
@@ -193,6 +207,7 @@ function HighlightedCode({ content, language = "json", maxHeight }) {
 function ToolCall({ tool, result }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isCompleted = !!result;
+  const mcpInfo = useMemo(() => parseMcpToolName(tool.name), [tool.name]);
 
   // Map LLM-provided type enum to icon/color/label
   const getInfoForLLMType = (type) => {
@@ -242,13 +257,26 @@ function ToolCall({ tool, result }) {
   }, [tool.name, tool.args?.type, tool.args?.command]);
 
   // Use inferred icon/color for run_command, otherwise use defaults
-  const Icon = commandInfo?.icon || toolIcons[tool.name] || toolIcons.default;
+  const Icon =
+    commandInfo?.icon ||
+    (mcpInfo ? Wrench : null) ||
+    toolIcons[tool.name] ||
+    toolIcons.default;
   const iconColor =
-    commandInfo?.color || toolColors[tool.name] || toolColors.default;
+    commandInfo?.color ||
+    (mcpInfo ? "text-cyan-400" : null) ||
+    toolColors[tool.name] ||
+    toolColors.default;
 
   // Get reason from tool args, or fallback to tool name
-  const reason = tool.args?.reason || tool.name.replace(/_/g, " ");
-  const displayName = commandInfo?.label || tool.name.replace(/_/g, " ");
+  const reason =
+    tool.args?.reason ||
+    (mcpInfo
+      ? `MCP tool call to ${mcpInfo.alias}/${mcpInfo.tool}`
+      : tool.name.replace(/_/g, " "));
+  const displayName = mcpInfo
+    ? `MCP • ${mcpInfo.alias} / ${mcpInfo.tool}`
+    : commandInfo?.label || tool.name.replace(/_/g, " ");
 
   // Filter out reason from displayed args
   const filteredArgs = { ...tool.args };

@@ -3,6 +3,9 @@ const OpenAI = require("openai");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { getLogger } = require("../services/logger");
+
+const logger = getLogger().child("OpenAIProvider");
 
 class OpenAIProvider extends BaseProvider {
   constructor(config) {
@@ -45,9 +48,9 @@ class OpenAIProvider extends BaseProvider {
       const filepath = path.join(this.debugDir, filename);
 
       fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
-      console.log(`[DEBUG] Wrote log to: ${filepath}`);
+      logger.debug(`[DEBUG] Wrote log to: ${filepath}`);
     } catch (error) {
-      console.error("[DEBUG] Failed to write log file:", error.message);
+      logger.error("[DEBUG] Failed to write log file:", error.message);
     }
   }
 
@@ -126,12 +129,12 @@ class OpenAIProvider extends BaseProvider {
 
     const useResponsesAPI = this.shouldUseResponsesAPI(model);
 
-    console.log(
+    logger.debug(
       `[OpenAI] Chat - Model: ${model}, UseResponsesAPI: ${useResponsesAPI}`
     );
 
     if (useResponsesAPI) {
-      console.log("[OpenAI] Using Responses API (non-streaming)");
+      logger.debug("[OpenAI] Using Responses API (non-streaming)");
       try {
         const convertedMessages = this.convertMessagesForResponsesAPI(messages);
         const requestBody = {
@@ -177,7 +180,7 @@ class OpenAIProvider extends BaseProvider {
           timestamp: new Date().toISOString(),
         });
 
-        console.log(
+        logger.debug(
           "[OpenAI] Responses API Data:",
           JSON.stringify(data, null, 2)
         );
@@ -202,11 +205,11 @@ class OpenAIProvider extends BaseProvider {
         // Fallback to Chat Completions format
         return data.choices?.[0]?.message?.content || "";
       } catch (error) {
-        console.error("[OpenAI] Responses API ERROR:", error);
+        logger.error("[OpenAI] Responses API ERROR:", error);
         throw new Error(`OpenAI Error: ${error.message}`);
       }
     } else {
-      console.log("[OpenAI] Using Chat Completions API");
+      logger.debug("[OpenAI] Using Chat Completions API");
       const args = {
         model,
         messages,
@@ -223,7 +226,7 @@ class OpenAIProvider extends BaseProvider {
         const response = await this.client.chat.completions.create(args);
         return response.choices[0].message.content;
       } catch (error) {
-        console.error("[OpenAI] API ERROR:", error);
+        logger.error("[OpenAI] API ERROR:", error);
         throw new Error(`OpenAI Error: ${error.status} ${error.message}`);
       }
     }
@@ -297,7 +300,7 @@ class OpenAIProvider extends BaseProvider {
             status: response.status,
             timestamp: new Date().toISOString(),
           });
-          console.error("[OpenAI] Responses API Error Response:", error);
+          logger.error("[OpenAI] Responses API Error Response:", error);
           throw new Error(
             `${response.status} ${
               error.error?.message || error.message || "Unknown error"
@@ -392,7 +395,7 @@ class OpenAIProvider extends BaseProvider {
                       const args = JSON.parse(toolCall.arguments);
                       await onToolCall(toolCall.name, args, callId);
                     } catch (e) {
-                      console.error(
+                      logger.error(
                         "[OpenAI] Failed to parse tool arguments:",
                         e
                       );
@@ -447,7 +450,7 @@ class OpenAIProvider extends BaseProvider {
           usage,
         };
       } catch (error) {
-        console.error("[OpenAI] Responses API ERROR:", error);
+        logger.error("[OpenAI] Responses API ERROR:", error);
         this.writeDebugLog("stream_error", {
           error: error.message,
           stack: error.stack,
@@ -457,7 +460,7 @@ class OpenAIProvider extends BaseProvider {
       }
     } else {
       // Use Chat Completions API (existing implementation)
-      console.log("[OpenAI] Using Chat Completions API (streaming)");
+      logger.debug("[OpenAI] Using Chat Completions API (streaming)");
 
       const args = {
         model,
@@ -475,7 +478,7 @@ class OpenAIProvider extends BaseProvider {
       if (tools && tools.length > 0) {
         args.tools = tools;
         args.tool_choice = "auto";
-        console.log(`[OpenAI] Chat Completions - Adding ${tools.length} tools`);
+        logger.debug(`[OpenAI] Chat Completions - Adding ${tools.length} tools`);
       }
 
       this.writeDebugLog("stream_request", {
@@ -536,7 +539,7 @@ class OpenAIProvider extends BaseProvider {
                       currentToolCall.id
                     );
                   } catch (e) {
-                    console.error(
+                    logger.error(
                       "[OpenAI] Failed to parse tool arguments:",
                       e
                     );
@@ -567,7 +570,7 @@ class OpenAIProvider extends BaseProvider {
           ) {
             try {
               const args = JSON.parse(currentToolCall.function.arguments);
-              console.log(
+              logger.debug(
                 `[OpenAI] Executing tool: ${currentToolCall.function.name}`
               );
               await onToolCall(
@@ -576,7 +579,7 @@ class OpenAIProvider extends BaseProvider {
                 currentToolCall.id
               );
             } catch (e) {
-              console.error("[OpenAI] Failed to parse tool arguments:", e);
+              logger.error("[OpenAI] Failed to parse tool arguments:", e);
             }
             currentToolCall = null;
           }
@@ -601,7 +604,7 @@ class OpenAIProvider extends BaseProvider {
           usage,
         };
       } catch (error) {
-        console.error("[OpenAI] API ERROR:", error);
+        logger.error("[OpenAI] API ERROR:", error);
         this.writeDebugLog("stream_error", {
           error: error.message,
           stack: error.stack,
@@ -617,7 +620,7 @@ class OpenAIProvider extends BaseProvider {
       await this.client.models.list();
       return true;
     } catch (error) {
-      console.error("[OpenAI] API Validation ERROR:", error);
+      logger.error("[OpenAI] API Validation ERROR:", error);
       return false;
     }
   }

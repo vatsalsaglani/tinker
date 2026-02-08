@@ -3,13 +3,16 @@ const { AzureOpenAI } = require("openai");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { getLogger } = require("../services/logger");
+
+const logger = getLogger().child("AzureProvider");
 
 class AzureProvider extends BaseProvider {
   constructor(config) {
     super(config);
 
     // Debug: log received config
-    console.log("[Azure] Constructor received config:", {
+    logger.debug("[Azure] Constructor received config:", {
       hasApiKey: !!config.apiKey,
       endpoint: config.endpoint,
       baseURL: config.baseURL,
@@ -26,7 +29,7 @@ class AzureProvider extends BaseProvider {
     // Whether to use Responses API
     this.useResponsesAPI = config.useResponsesAPI || false;
 
-    console.log("[Azure] Resolved values:", {
+    logger.debug("[Azure] Resolved values:", {
       hasApiKey: !!this.apiKey,
       endpoint: this.endpoint,
       deploymentName: this.deploymentName,
@@ -41,11 +44,11 @@ class AzureProvider extends BaseProvider {
         apiVersion: this.apiVersion,
         deployment: this.deploymentName,
       });
-      console.log(
+      logger.debug(
         `[Azure] Initialized with endpoint: ${this.endpoint}, deployment: ${this.deploymentName}`
       );
     } else {
-      console.log(
+      logger.debug(
         `[Azure] Missing apiKey (${!!this.apiKey}) or endpoint (${!!this
           .endpoint}) - client not initialized`
       );
@@ -82,9 +85,9 @@ class AzureProvider extends BaseProvider {
       const filepath = path.join(this.debugDir, filename);
 
       fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
-      console.log(`[Azure DEBUG] Wrote log to: ${filepath}`);
+      logger.debug(`[Azure DEBUG] Wrote log to: ${filepath}`);
     } catch (error) {
-      console.error("[Azure DEBUG] Failed to write log file:", error.message);
+      logger.error("[Azure DEBUG] Failed to write log file:", error.message);
     }
   }
 
@@ -224,7 +227,7 @@ class AzureProvider extends BaseProvider {
 
         return data.output_text || "";
       } catch (error) {
-        console.error("[Azure] Responses API Error:", error);
+        logger.error("[Azure] Responses API Error:", error);
         throw new Error(`Azure Responses API Error: ${error.message}`);
       }
     } else {
@@ -245,7 +248,7 @@ class AzureProvider extends BaseProvider {
         const response = await this.client.chat.completions.create(args);
         return response.choices[0].message.content;
       } catch (error) {
-        console.error("Azure OpenAI API Error:", error);
+        logger.error("Azure OpenAI API Error:", error);
         throw new Error(`Azure OpenAI Error: ${error.message}`);
       }
     }
@@ -428,7 +431,7 @@ class AzureProvider extends BaseProvider {
                     const args = JSON.parse(tc.arguments);
                     await onToolCall(tc.name, args, tc.id);
                   } catch (e) {
-                    console.error("[Azure] Failed to parse tool arguments:", e);
+                    logger.error("[Azure] Failed to parse tool arguments:", e);
                   }
                 }
               }
@@ -457,7 +460,7 @@ class AzureProvider extends BaseProvider {
         usage,
       };
     } catch (error) {
-      console.error("[Azure] Responses API Streaming Error:", error);
+      logger.error("[Azure] Responses API Streaming Error:", error);
       this.writeDebugLog("responses_stream_error", {
         error: error.message,
         timestamp: new Date().toISOString(),
@@ -491,7 +494,7 @@ class AzureProvider extends BaseProvider {
     if (tools && tools.length > 0) {
       args.tools = tools;
       args.tool_choice = "auto";
-      console.log(`[Azure] Adding ${tools.length} tools`);
+      logger.debug(`[Azure] Adding ${tools.length} tools`);
     }
 
     this.writeDebugLog("completions_stream_request", {
@@ -539,7 +542,7 @@ class AzureProvider extends BaseProvider {
                     currentToolCall.id
                   );
                 } catch (e) {
-                  console.error("[Azure] Failed to parse tool arguments:", e);
+                  logger.error("[Azure] Failed to parse tool arguments:", e);
                 }
               }
               currentToolCall = {
@@ -566,7 +569,7 @@ class AzureProvider extends BaseProvider {
         ) {
           try {
             const args = JSON.parse(currentToolCall.function.arguments);
-            console.log(
+            logger.debug(
               `[Azure] Executing tool: ${currentToolCall.function.name}`
             );
             await onToolCall(
@@ -575,7 +578,7 @@ class AzureProvider extends BaseProvider {
               currentToolCall.id
             );
           } catch (e) {
-            console.error("[Azure] Failed to parse tool arguments:", e);
+            logger.error("[Azure] Failed to parse tool arguments:", e);
           }
           currentToolCall = null;
         }
@@ -598,7 +601,7 @@ class AzureProvider extends BaseProvider {
         usage,
       };
     } catch (error) {
-      console.error("Azure OpenAI Streaming Error:", error);
+      logger.error("Azure OpenAI Streaming Error:", error);
       this.writeDebugLog("completions_stream_error", {
         error: error.message,
         timestamp: new Date().toISOString(),

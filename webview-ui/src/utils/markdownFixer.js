@@ -1,3 +1,7 @@
+import { createUILogger } from "./ui-logger";
+
+const uiLogger = createUILogger("MarkdownFixer");
+
 /**
  * Fixes nested code blocks in markdown content
  * When LLM outputs markdown that contains code blocks, the nested backticks break rendering
@@ -175,15 +179,18 @@ export function escapeNestedBackticks(content) {
 export function fixMessageContent(content) {
   if (!content) return content;
 
-  console.log("[MarkdownFixer] Input length:", content.length);
-  console.log("[MarkdownFixer] Has triple backticks:", content.includes("```"));
+  uiLogger.debug("[MarkdownFixer] Input length", content.length);
+  uiLogger.debug(
+    "[MarkdownFixer] Has triple backticks",
+    content.includes("```")
+  );
 
   // Use the line-by-line approach which is more accurate
   const fixed = escapeNestedBackticks(content);
 
-  console.log("[MarkdownFixer] Output length:", fixed.length);
-  console.log("[MarkdownFixer] Has 4 backticks:", fixed.includes("````"));
-  console.log("[MarkdownFixer] Changed:", content !== fixed);
+  uiLogger.debug("[MarkdownFixer] Output length", fixed.length);
+  uiLogger.debug("[MarkdownFixer] Has 4 backticks", fixed.includes("````"));
+  uiLogger.debug("[MarkdownFixer] Changed", content !== fixed);
 
   return fixed;
 }

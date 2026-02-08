@@ -3,6 +3,9 @@ const AnthropicBedrock = require("@anthropic-ai/bedrock-sdk");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { getLogger } = require("../services/logger");
+
+const logger = getLogger().child("BedrockProvider");
 
 class BedrockProvider extends BaseProvider {
   constructor(config) {
@@ -59,9 +62,9 @@ class BedrockProvider extends BaseProvider {
       const filepath = path.join(this.debugDir, filename);
 
       fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
-      console.log(`[Bedrock DEBUG] Wrote log to: ${filepath}`);
+      logger.debug(`[Bedrock DEBUG] Wrote log to: ${filepath}`);
     } catch (error) {
-      console.error("[Bedrock DEBUG] Failed to write log file:", error.message);
+      logger.error("[Bedrock DEBUG] Failed to write log file:", error.message);
     }
   }
 
@@ -173,7 +176,7 @@ class BedrockProvider extends BaseProvider {
         ? response.content[0].text
         : "";
     } catch (error) {
-      console.error("Bedrock API Error:", error);
+      logger.error("Bedrock API Error:", error);
       throw new Error(`Bedrock Error: ${error.message}`);
     }
   }
@@ -206,7 +209,7 @@ class BedrockProvider extends BaseProvider {
           description: t.function.description,
           input_schema: t.function.parameters,
         }));
-        console.log(`[Bedrock] Adding ${tools.length} tools`);
+        logger.debug(`[Bedrock] Adding ${tools.length} tools`);
       }
 
       this.writeDebugLog("stream_request", {
@@ -285,11 +288,11 @@ class BedrockProvider extends BaseProvider {
           try {
             const input = JSON.parse(currentToolUse.input);
             if (onToolCall) {
-              console.log(`[Bedrock] Executing tool: ${currentToolUse.name}`);
+              logger.debug(`[Bedrock] Executing tool: ${currentToolUse.name}`);
               await onToolCall(currentToolUse.name, input, currentToolUse.id);
             }
           } catch (e) {
-            console.error("[Bedrock] Failed to parse tool input:", e);
+            logger.error("[Bedrock] Failed to parse tool input:", e);
           }
           currentToolUse = null;
         }
@@ -317,7 +320,7 @@ class BedrockProvider extends BaseProvider {
         usage,
       };
     } catch (error) {
-      console.error("Bedrock Streaming Error:", error);
+      logger.error("Bedrock Streaming Error:", error);
       this.writeDebugLog("stream_error", {
         error: error.message,
         region: this.awsRegion,

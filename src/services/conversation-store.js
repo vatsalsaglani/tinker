@@ -11,6 +11,10 @@
  * - tinker_toolcalls_{conversationId}_{messageId}: Tool calls for a message
  */
 
+const { getLogger } = require("./logger");
+
+const logger = getLogger().child("ConversationStore");
+
 class ConversationStore {
   constructor(context) {
     this.context = context;
@@ -35,7 +39,7 @@ class ConversationStore {
       try {
         fs.mkdirSync(tinkerDir, { recursive: true });
       } catch (err) {
-        console.error(
+        logger.error(
           `[ConversationStore] Failed to create .tinker dir: ${err.message}`
         );
       }
@@ -672,7 +676,7 @@ class ConversationStore {
           const content = fs.readFileSync(this._usageFilePath, "utf8");
           globalUsage = JSON.parse(content);
         } catch (e) {
-          console.error(
+          logger.error(
             `[ConversationStore] Error parsing usage file: ${e.message}`
           );
         }
@@ -718,7 +722,7 @@ class ConversationStore {
         JSON.stringify(globalUsage, null, 2)
       );
     } catch (err) {
-      console.error(
+      logger.error(
         `[ConversationStore] Failed to sync usage to file: ${err.message}`
       );
     }
@@ -765,7 +769,7 @@ class ConversationStore {
         const content = fs.readFileSync(this._usageFilePath, "utf8");
         globalStats = JSON.parse(content);
       } catch (err) {
-        console.error(
+        logger.error(
           `[ConversationStore] Failed to read usage file: ${err.message}`
         );
       }

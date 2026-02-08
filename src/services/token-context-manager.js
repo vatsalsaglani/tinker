@@ -5,6 +5,9 @@
  */
 
 const ModelConfigLoader = require("./model-config-loader");
+const { getLogger } = require("./logger");
+
+const logger = getLogger().child("TokenContextManager");
 
 class TokenContextManager {
   constructor(configPath = null) {
@@ -64,7 +67,7 @@ class TokenContextManager {
       // Unknown provider - try to extract what we can
       return this._normalizeGenericUsage(rawUsage);
     } catch (error) {
-      console.error(
+      logger.error(
         `[TokenContextManager] Failed to normalize usage for ${provider}:`,
         error.message
       );
@@ -134,7 +137,7 @@ class TokenContextManager {
     // Log warning once if total doesn't match (likely includes thinking tokens)
     const expectedTotal = inputTokens + outputTokens;
     if (totalTokens !== expectedTotal && !this._geminiWarningLogged) {
-      console.warn(
+      logger.warn(
         `[TokenContextManager] Gemini total_tokens (${totalTokens}) differs from input+output (${expectedTotal}). ` +
           `This may include thinking tokens. Using reported total.`
       );

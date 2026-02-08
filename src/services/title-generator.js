@@ -1,4 +1,7 @@
 const { z } = require("zod");
+const { getLogger } = require("./logger");
+
+const logger = getLogger().child("TitleGenerator");
 
 /**
  * TitleGenerator - LLM-based title generation for conversations
@@ -88,7 +91,7 @@ Respond with ONLY a JSON object in this format: {"title": "Your Title Here"}`;
           const validated = this.titleSchema.parse(parsed);
           return validated.title;
         } catch (parseError) {
-          console.log("[TitleGenerator] Parse error:", parseError.message);
+          logger.info("[TitleGenerator] Parse error:", parseError.message);
         }
       }
 
@@ -100,7 +103,7 @@ Respond with ONLY a JSON object in this format: {"title": "Your Title Here"}`;
 
       return "New Chat";
     } catch (error) {
-      console.error("[TitleGenerator] Error generating title:", error.message);
+      logger.error("[TitleGenerator] Error generating title:", error.message);
       return "New Chat";
     }
   }

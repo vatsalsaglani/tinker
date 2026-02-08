@@ -27,10 +27,16 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { createUILogger, installGlobalErrorHandlers } from "./utils/ui-logger";
 
 // Acquire VS Code API once at module level
 const vscode =
   typeof acquireVsCodeApi !== "undefined" ? acquireVsCodeApi() : null;
+if (typeof window !== "undefined" && vscode) {
+  window.__tinkerVsCodeApi = vscode;
+}
+const uiLogger = createUILogger("UsageDashboard");
+installGlobalErrorHandlers(uiLogger);
 
 // Branding colors from input.css
 const COLORS = {

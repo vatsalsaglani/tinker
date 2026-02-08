@@ -1,12 +1,26 @@
 const vscode = require("vscode");
 const ChatViewProvider = require("./services/chat-provider");
 const DiffContentProvider = require("./services/diff-content-provider");
+const { getLogger } = require("./services/logger");
+
+const rootLogger = getLogger();
+const logger = rootLogger.child("Extension");
 
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  console.log("🔧 Tinker extension is activating...");
+  const config = vscode.workspace.getConfiguration("tinkerAssistant");
+  const outputChannel = vscode.window.createOutputChannel("Tinker");
+
+  rootLogger.initialize({
+    outputChannel,
+    level: config.get("logLevel", "info"),
+    revealOnError: config.get("revealLogsOnError", false),
+  });
+  context.subscriptions.push(outputChannel);
+
+  logger.info("Tinker extension is activating...");
 
   // Register diff content provider for preview
   const diffProvider = new DiffContentProvider();
@@ -20,6 +34,11 @@ function activate(context) {
   // Create and register chat view provider
   const chatProvider = new ChatViewProvider(context.extensionUri, diffProvider);
   chatProvider.setContext(context);
+  context.subscriptions.push({
+    dispose: () => {
+      chatProvider.dispose?.();
+    },
+  });
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("tinker-sidebar", chatProvider, {
@@ -104,6 +123,13 @@ function activate(context) {
     })
   );
 
+  // Command: Open MCP panel
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tinker.openMcpPanel", () => {
+      chatProvider.openMcpPanel();
+    })
+  );
+
   // Command: New conversation
   context.subscriptions.push(
     vscode.commands.registerCommand("tinker.newConversation", async () => {
@@ -125,11 +151,40 @@ function activate(context) {
     })
   );
 
-  console.log("✅ Tinker extension activated successfully");
+  // Command: Show logs
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tinker.showLogs", () => {
+      rootLogger.show(false);
+    })
+  );
+
+  // Keep logger settings in sync with configuration changes
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      const updatedConfig = vscode.workspace.getConfiguration("tinkerAssistant");
+      if (event.affectsConfiguration("tinkerAssistant.logLevel")) {
+        rootLogger.setLevel(updatedConfig.get("logLevel", "info"));
+      }
+      if (event.affectsConfiguration("tinkerAssistant.revealLogsOnError")) {
+        rootLogger.setRevealOnError(
+          updatedConfig.get("revealLogsOnError", false)
+        );
+      }
+      if (
+        event.affectsConfiguration("tinkerAssistant.mcp.enabled") ||
+        event.affectsConfiguration("tinkerAssistant.mcp.servers")
+      ) {
+        chatProvider.handleLoadMcpConfig?.();
+        chatProvider.handleRefreshMcpTools?.(true);
+      }
+    })
+  );
+
+  logger.info("Tinker extension activated successfully");
 }
 
 function deactivate() {
-  console.log("Tinker extension deactivated");
+  logger.info("Tinker extension deactivated");
 }
 
 module.exports = {

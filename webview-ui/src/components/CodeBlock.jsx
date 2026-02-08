@@ -76,7 +76,12 @@ function CodeBlock({ block, appliedBlocks = new Set(), isStreaming = false }) {
   const vscode = useVSCodeMessage(() => {});
   const [copied, setCopied] = useState(false);
 
-  const contentHash = (block.search || block.content || "").slice(0, 50);
+  const contentHash = (
+    block.search ||
+    block.content ||
+    block.replace ||
+    ""
+  ).slice(0, 50);
   const blockKey = `${block.filePath}:${block.type}:${contentHash}`;
   const isApplied = appliedBlocks.has(blockKey);
 

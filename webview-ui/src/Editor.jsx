@@ -1,6 +1,10 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Code2 } from "lucide-react";
+import { createUILogger, installGlobalErrorHandlers } from "./utils/ui-logger";
+
+const uiLogger = createUILogger("Editor");
+installGlobalErrorHandlers(uiLogger);
 
 function Editor() {
   return (

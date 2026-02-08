@@ -1,8 +1,13 @@
 import { useEffect } from "react";
+import { createUILogger } from "../utils/ui-logger";
 
 // Get VS Code API instance
 const vscode =
   typeof acquireVsCodeApi !== "undefined" ? acquireVsCodeApi() : null;
+if (typeof window !== "undefined" && vscode) {
+  window.__tinkerVsCodeApi = vscode;
+}
+const uiLogger = createUILogger("VSCodeMessage");
 
 /**
  * Hook to handle VS Code webview messaging
@@ -30,7 +35,7 @@ export function useVSCodeMessage(handler) {
       if (vscode) {
         vscode.postMessage(message);
       } else {
-        console.warn("VS Code API not available:", message);
+        uiLogger.warn("VS Code API not available", message);
       }
     },
     getState: () => vscode?.getState() || {},

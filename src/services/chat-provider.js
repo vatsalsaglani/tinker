@@ -7,6 +7,9 @@ const DiffApplier = require("./diff-applier");
 const ConversationStore = require("./conversation-store");
 const TitleGenerator = require("./title-generator");
 const TokenContextManager = require("./token-context-manager");
+const { getLogger } = require("./logger");
+const { MCPConfigStore } = require("./mcp/mcp-config-store");
+const { MCPManager } = require("./mcp/mcp-manager");
 const { WorkspaceTools } = require("../tools/workspace-tools");
 const { DEBUG_LOGGING_ENABLED, DEBUG_LOG_DIR } = require("../utils/constants");
 
@@ -20,7 +23,10 @@ class ChatViewProvider {
     this.llmConnector = new LLMConnector();
     this.conversationHistory = [];
     this.abortController = null;
-    this.outputChannel = vscode.window.createOutputChannel("Tinker Assistant");
+    this.stopRequested = false;
+    this.logger = getLogger().child("ChatProvider");
+    this.mcpConfigStore = null;
+    this.mcpManager = null;
 
     // Conversation persistence (initialized in setContext)
     this.storage = null;
@@ -35,6 +41,16 @@ class ChatViewProvider {
     this._context = context;
     // Initialize storage with context (for globalState access)
     this.storage = new ConversationStore(context);
+    this.mcpConfigStore = new MCPConfigStore({
+      logger: this.logger.child("MCPConfig"),
+      getSecret: (key) => this.getSecret(key),
+      setSecret: (key, value) => this.setSecret(key, value),
+      deleteSecret: (key) => this.deleteSecret(key),
+    });
+    this.mcpManager = new MCPManager({
+      configStore: this.mcpConfigStore,
+      logger: this.logger.child("MCP"),
+    });
   }
 
   /**
@@ -182,12 +198,31 @@ class ChatViewProvider {
   }
 
   log(message, ...args) {
-    const timestamp = new Date().toISOString().substring(11, 23);
-    const logMessage = `[${timestamp}] ${message}`;
-    console.log(logMessage, ...args);
-    this.outputChannel.appendLine(
-      logMessage + (args.length > 0 ? " " + JSON.stringify(args) : "")
-    );
+    this.logger.info(message, ...args);
+  }
+
+  _handleUILogMessage(data, fallbackSource) {
+    if (!data || data.type !== "uiLog") {
+      return false;
+    }
+
+    const source =
+      typeof data.source === "string" && data.source.trim()
+        ? data.source.trim()
+        : fallbackSource;
+    const uiLogger = this.logger.child(`UI:${source || "Webview"}`);
+    const level = ["error", "warn", "info", "debug"].includes(data.level)
+      ? data.level
+      : "info";
+    const args = Array.isArray(data.args) ? data.args : [];
+    const message = data.message || "UI log";
+
+    if (level === "error") uiLogger.error(message, ...args);
+    else if (level === "warn") uiLogger.warn(message, ...args);
+    else if (level === "debug") uiLogger.debug(message, ...args);
+    else uiLogger.info(message, ...args);
+
+    return true;
   }
 
   resolveWebviewView(webviewView, context, _token) {
@@ -205,6 +240,10 @@ class ChatViewProvider {
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (data) => {
+      if (this._handleUILogMessage(data, "Sidebar")) {
+        return;
+      }
+
       switch (data.type) {
         case "sendMessage":
           await this.handleUserMessage(
@@ -294,6 +333,12 @@ class ChatViewProvider {
         case "openConfigPanel":
           this.openConfigPanel();
           break;
+        case "openMcpPanel":
+          this.openMcpPanel();
+          break;
+        case "setMcpEnabled":
+          await this.setMcpEnabled(Boolean(data.enabled));
+          break;
         case "openReviewPanel":
           this.openReviewPanel(
             data.pendingBlocks || [],
@@ -334,6 +379,100 @@ class ChatViewProvider {
 
     // Load settings on startup
     this.loadSettings();
+  }
+
+  async isMcpEnabled() {
+    if (!this.mcpConfigStore) return false;
+    const config = await this.mcpConfigStore.loadConfig();
+    return Boolean(config.enabled);
+  }
+
+  async setMcpEnabled(enabled) {
+    if (!this.mcpConfigStore) return;
+
+    await this.mcpConfigStore.setEnabled(Boolean(enabled));
+    if (this.mcpManager) {
+      await this.mcpManager.refreshToolDefinitions({ force: true });
+    }
+
+    const payload = { type: "mcpEnabledState", enabled: Boolean(enabled) };
+    this._view?.webview.postMessage(payload);
+    this._mcpPanel?.webview.postMessage(payload);
+  }
+
+  async getCombinedToolDefinitions() {
+    const builtInTools = this.workspaceTools.getToolDefinitions();
+    if (!this.mcpConfigStore || !this.mcpManager) {
+      return {
+        tools: builtInTools,
+        mcpTools: [],
+        mcpToolSummary: "",
+      };
+    }
+
+    const enabled = await this.isMcpEnabled();
+    if (!enabled) {
+      return {
+        tools: builtInTools,
+        mcpTools: [],
+        mcpToolSummary: "",
+      };
+    }
+
+    try {
+      const mcpTools = await this.mcpManager.getToolDefinitions();
+      let mcpToolSummary = this.buildMcpToolSummary(mcpTools);
+
+      if (mcpTools.length === 0) {
+        const toolsByServer = await this.mcpManager.getToolsByServer({
+          force: false,
+        });
+        const discoveredTools = Object.values(toolsByServer || {}).flat();
+        const discoveredCount = discoveredTools.length;
+        const blockedCount = discoveredTools.filter(
+          (tool) => tool?.included === false
+        ).length;
+
+        if (discoveredCount > 0) {
+          mcpToolSummary =
+            `MCP is enabled, but 0 tools are currently exposed to you.\n` +
+            `Discovered tools: ${discoveredCount}, blocked by safety policy: ${blockedCount}.\n` +
+            `If appropriate, user can enable writable tools for that MCP server.`;
+        }
+      }
+
+      return {
+        tools: [...builtInTools, ...mcpTools],
+        mcpTools,
+        mcpToolSummary,
+      };
+    } catch (error) {
+      this.logger.warn("Failed loading MCP tools. Continuing with built-in tools.", error);
+      return {
+        tools: builtInTools,
+        mcpTools: [],
+        mcpToolSummary: "",
+      };
+    }
+  }
+
+  buildMcpToolSummary(mcpTools = []) {
+    if (!Array.isArray(mcpTools) || mcpTools.length === 0) {
+      return "";
+    }
+
+    const MAX_ITEMS = 25;
+    const lines = mcpTools.slice(0, MAX_ITEMS).map((tool) => {
+      const name = tool?.function?.name || "mcp_tool";
+      const description = tool?.function?.description || "MCP tool";
+      return `- \`${name}\`: ${description}`;
+    });
+
+    if (mcpTools.length > MAX_ITEMS) {
+      lines.push(`- ...and ${mcpTools.length - MAX_ITEMS} more MCP tools`);
+    }
+
+    return lines.join("\n");
   }
 
   /**
@@ -381,17 +520,17 @@ class ChatViewProvider {
     try {
       let results = [];
 
-      console.log(`[Symbol Search] Query: "${query}"`);
+      this.logger.debug(`[Symbol Search] Query: "${query}"`);
 
       // Strategy 1: Workspace symbols (best for functions, classes, methods)
       if (query.length >= 1) {
-        console.log("[Symbol Search] Executing workspace symbol provider...");
+        this.logger.debug("[Symbol Search] Executing workspace symbol provider...");
         const symbols = await vscode.commands.executeCommand(
           "vscode.executeWorkspaceSymbolProvider",
           query
         );
 
-        console.log(
+        this.logger.debug(
           `[Symbol Search] Workspace symbols found: ${symbols?.length || 0}`
         );
 
@@ -408,7 +547,7 @@ class ChatViewProvider {
 
       // Strategy 2: Document symbols from active file (fallback)
       if (results.length === 0 && vscode.window.activeTextEditor) {
-        console.log("[Symbol Search] Falling back to document symbols...");
+        this.logger.debug("[Symbol Search] Falling back to document symbols...");
         const docSymbols = await vscode.commands.executeCommand(
           "vscode.executeDocumentSymbolProvider",
           vscode.window.activeTextEditor.document.uri
@@ -416,7 +555,7 @@ class ChatViewProvider {
 
         if (docSymbols) {
           const flatSymbols = this.flattenSymbols(docSymbols, query);
-          console.log(
+          this.logger.debug(
             `[Symbol Search] Document symbols found: ${flatSymbols.length}`
           );
           results = flatSymbols.slice(0, 20).map((s) => ({
@@ -427,7 +566,7 @@ class ChatViewProvider {
         }
       }
 
-      console.log(`[Symbol Search] Total results: ${results.length}`);
+      this.logger.debug(`[Symbol Search] Total results: ${results.length}`);
 
       this._view.webview.postMessage({
         type: "searchResults",
@@ -435,7 +574,7 @@ class ChatViewProvider {
         results: results,
       });
     } catch (error) {
-      console.error("[Symbol Search] Error:", error);
+      this.logger.error("[Symbol Search] Error:", error);
       this.log("Symbol search error:", error);
       this._view.webview.postMessage({
         type: "searchResults",
@@ -494,7 +633,7 @@ class ChatViewProvider {
       const type = chip?.type || "file";
 
       if (!value) {
-        console.error("[OpenContext] No value provided:", chip);
+        this.logger.error("[OpenContext] No value provided:", chip);
         return;
       }
 
@@ -529,7 +668,7 @@ class ChatViewProvider {
         }
       }
 
-      console.log(`[OpenContext] Opening: ${filePath}, line: ${line}`);
+      this.logger.debug(`[OpenContext] Opening: ${filePath}, line: ${line}`);
 
       const doc = await vscode.workspace.openTextDocument(filePath);
       const editor = await vscode.window.showTextDocument(doc);
@@ -540,7 +679,7 @@ class ChatViewProvider {
         editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
       }
     } catch (error) {
-      console.error("[OpenContext] Error:", error);
+      this.logger.error("[OpenContext] Error:", error);
       vscode.window.showErrorMessage(`Could not open file: ${error.message}`);
     }
   }
@@ -629,19 +768,20 @@ class ChatViewProvider {
    * Stop generation
    */
   stopGeneration() {
+    this.stopRequested = true;
+
     if (this.abortController) {
       this.abortController.abort();
-      this.abortController = null;
-
-      this._view?.webview.postMessage({
-        type: "generationStopped",
-      });
-
-      this._view?.webview.postMessage({
-        type: "thinking",
-        thinking: false,
-      });
     }
+
+    this._view?.webview.postMessage({
+      type: "generationStopped",
+    });
+
+    this._view?.webview.postMessage({
+      type: "thinking",
+      thinking: false,
+    });
   }
 
   /**
@@ -659,6 +799,7 @@ class ChatViewProvider {
 
     // Create abort controller
     this.abortController = new AbortController();
+    this.stopRequested = false;
 
     // Build context from chips (for LLM)
     let contextText = "";
@@ -802,14 +943,15 @@ class ChatViewProvider {
         include_files: true,
       });
 
-      // System prompt with workspace context
+      // Merge built-in tools + MCP tools (when MCP is enabled)
+      const { tools, mcpToolSummary } = await this.getCombinedToolDefinitions();
+
+      // System prompt with workspace context and MCP summary
       const systemPrompt = LLMConnector.getSystemPrompt({
         workspaceRoot: this.workspaceTools.workspaceRoot || "",
         fileTree: fileTree.tree || "",
+        mcpToolSummary,
       });
-
-      // Get tools
-      const tools = this.workspaceTools.getToolDefinitions();
 
       // Multi-turn conversation with tools
       // Progressive budgeting: inject warnings as we approach limit
@@ -822,6 +964,10 @@ class ChatViewProvider {
       let totalToolCalls = 0;
 
       while (currentTurn < MAX_TURNS) {
+        if (this.stopRequested || this.abortController?.signal?.aborted) {
+          throw new Error("Generation aborted");
+        }
+
         currentTurn++;
         this.log(
           `[Turn ${currentTurn}/${MAX_TURNS}] Starting... (${totalToolCalls} tools used so far)`
@@ -864,6 +1010,10 @@ class ChatViewProvider {
         const MAX_TOOL_RETRIES = 3;
 
         const handleToolCall = async (toolName, args, toolCallId) => {
+          if (this.stopRequested || this.abortController?.signal?.aborted) {
+            throw new Error("Generation aborted");
+          }
+
           this.log(`[Tool Call] ${toolName}`, args);
           totalToolCalls++;
 
@@ -874,8 +1024,15 @@ class ChatViewProvider {
               `Args: ${JSON.stringify(args, null, 2)}`
           );
 
-          // Execute tool
-          const result = await this.workspaceTools.executeTool(toolName, args);
+          // Execute tool (built-in workspace tool or MCP tool)
+          const result =
+            this.mcpManager && this.mcpManager.isMcpToolName(toolName)
+              ? await this.mcpManager.executeTool(toolName, args)
+              : await this.workspaceTools.executeTool(toolName, args);
+
+          if (this.stopRequested || this.abortController?.signal?.aborted) {
+            throw new Error("Generation aborted");
+          }
 
           // Check for validation errors - don't show to UI, request retry from LLM
           if (result.validationError) {
@@ -960,6 +1117,10 @@ class ChatViewProvider {
         let chunkBuffer = "";
 
         const flushBuffer = () => {
+          if (this.stopRequested || this.abortController?.signal?.aborted) {
+            chunkBuffer = "";
+            return;
+          }
           if (chunkBuffer.length > 0) {
             this._view.webview.postMessage({
               type: "assistantChunk",
@@ -972,7 +1133,7 @@ class ChatViewProvider {
         const streamResult = await this.llmConnector.streamChat(
           messages,
           (chunk) => {
-            if (this.abortController?.signal.aborted) {
+            if (this.stopRequested || this.abortController?.signal?.aborted) {
               throw new Error("Generation aborted");
             }
 
@@ -995,6 +1156,10 @@ class ChatViewProvider {
 
         // Flush any remaining buffer after stream completes
         flushBuffer();
+
+        if (this.stopRequested || this.abortController?.signal?.aborted) {
+          throw new Error("Generation aborted");
+        }
 
         // Debug log: capture full turn data for debugging
         const providerName =
@@ -1046,6 +1211,9 @@ class ChatViewProvider {
               normalizedUsage.reasoningTokens || 0;
             accumulatedUsage.cachedTokens += normalizedUsage.cachedTokens || 0;
             accumulatedUsage.totalTokens += normalizedUsage.totalTokens || 0;
+
+            // Track conversation-level cumulative tokens for context persistence.
+            this.tokenManager.addCumulativeTokens(normalizedUsage.totalTokens || 0);
           }
           if (cost?.totalCost) {
             accumulatedCost += cost.totalCost;
@@ -1181,7 +1349,7 @@ class ChatViewProvider {
       const modelName =
         this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o";
       const contextStatus = this.tokenManager.getContextStatus(
-        accumulatedUsage.inputTokens + accumulatedUsage.outputTokens,
+        this.tokenManager.getCumulativeTokens(),
         providerName,
         modelName
       );
@@ -1286,9 +1454,19 @@ class ChatViewProvider {
     } catch (error) {
       this.log("[Error]", error);
 
-      // Save partial output if we have any content
-      if (fullResponse && fullResponse.length > 0) {
-        this.log("[Error Recovery] Saving partial output before error");
+      const isGenerationAborted = error.message === "Generation aborted";
+      const hasPartialOutput = Boolean(
+        (fullResponse && fullResponse.length > 0) ||
+          (turnToolCalls && turnToolCalls.length > 0)
+      );
+
+      // Save partial output if we have any content/tool calls (including user aborts)
+      if (hasPartialOutput) {
+        this.log(
+          isGenerationAborted
+            ? "[Abort Recovery] Saving partial output before stop"
+            : "[Error Recovery] Saving partial output before error"
+        );
 
         // Calculate context status for display
         const providerName =
@@ -1301,12 +1479,13 @@ class ChatViewProvider {
           providerName,
           modelName
         );
+        const partialBlocks = DiffApplier.parseAiderBlocks(fullResponse || "");
 
-        // Send partial output to UI
+        // Send partial output to UI (finalizes current assistant draft)
         this._view.webview.postMessage({
           type: "assistantComplete",
-          message: fullResponse,
-          blocks: [],
+          message: fullResponse || "",
+          blocks: partialBlocks || [],
           usage:
             accumulatedUsage.totalTokens > 0
               ? {
@@ -1321,6 +1500,14 @@ class ChatViewProvider {
           contextStatus: contextStatus,
         });
 
+        // Keep aborted partial assistant output in conversation context
+        if (fullResponse && fullResponse.length > 0) {
+          this.conversationHistory.push({
+            role: "assistant",
+            content: fullResponse,
+          });
+        }
+
         // Persist partial message to storage
         if (this.storage && this.currentConversationId) {
           try {
@@ -1330,9 +1517,16 @@ class ChatViewProvider {
               this.currentConversationId,
               {
                 role: "assistant",
-                content: fullResponse + "\n\n⚠️ *Message interrupted by error*",
+                content: isGenerationAborted
+                  ? `${fullResponse || ""}\n\n⏹️ *Generation stopped by user*`
+                  : `${fullResponse || ""}\n\n⚠️ *Message interrupted by error*`,
                 provider: providerName,
                 model: modelName,
+                toolCalls: turnToolCalls.length > 0 ? turnToolCalls : null,
+                codeBlocks:
+                  partialBlocks && partialBlocks.length > 0
+                    ? partialBlocks
+                    : null,
                 usage:
                   accumulatedUsage.totalTokens > 0
                     ? {
@@ -1346,10 +1540,16 @@ class ChatViewProvider {
                     : null,
               }
             );
-            this.log("[Error Recovery] Partial message saved to storage");
+            this.log(
+              isGenerationAborted
+                ? "[Abort Recovery] Partial message saved to storage"
+                : "[Error Recovery] Partial message saved to storage"
+            );
           } catch (saveErr) {
             this.log(
-              "[Error Recovery] Failed to save partial message:",
+              isGenerationAborted
+                ? "[Abort Recovery] Failed to save partial message:"
+                : "[Error Recovery] Failed to save partial message:",
               saveErr
             );
           }
@@ -1368,6 +1568,7 @@ class ChatViewProvider {
         thinking: false,
       });
       this.abortController = null;
+      this.stopRequested = false;
     }
   }
 
@@ -1418,7 +1619,7 @@ class ChatViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
       vscode.window.showErrorMessage("No workspace open");
-      return;
+      return { success: false, error: "No workspace open" };
     }
 
     const result = await DiffApplier.applyBlock(
@@ -1431,6 +1632,8 @@ class ChatViewProvider {
     } else {
       vscode.window.showErrorMessage(result.error);
     }
+
+    return result;
   }
 
   /**
@@ -1739,23 +1942,78 @@ class ChatViewProvider {
     let awsAccessKey = settings.awsAccessKey;
     let awsSecretKey = settings.awsSecretKey;
     let awsRegion = settings.awsRegion;
+    let isClearingBedrockCredentials = false;
     if (settings.provider === "bedrock") {
-      if (awsAccessKey && awsSecretKey) {
-        // Store AWS credentials securely
-        await config.update(
-          "awsRegion",
-          awsRegion || "us-east-1",
-          vscode.ConfigurationTarget.Global
-        );
-        // Store AWS keys using helper method (with fallback)
-        await this.setSecret("bedrock_awsAccessKey", awsAccessKey);
-        await this.setSecret("bedrock_awsSecretKey", awsSecretKey);
+      const hasExplicitAwsFields =
+        Object.prototype.hasOwnProperty.call(settings, "awsAccessKey") ||
+        Object.prototype.hasOwnProperty.call(settings, "awsSecretKey") ||
+        Object.prototype.hasOwnProperty.call(settings, "awsRegion");
+
+      if (hasExplicitAwsFields) {
+        const accessKeyInput =
+          typeof settings.awsAccessKey === "string"
+            ? settings.awsAccessKey.trim()
+            : "";
+        const secretKeyInput =
+          typeof settings.awsSecretKey === "string"
+            ? settings.awsSecretKey.trim()
+            : "";
+
+        if (!accessKeyInput && !secretKeyInput) {
+          // Explicit delete intent from UI
+          isClearingBedrockCredentials = true;
+          await this.deleteSecret("bedrock_awsAccessKey");
+          await this.deleteSecret("bedrock_awsSecretKey");
+
+          awsAccessKey = "";
+          awsSecretKey = "";
+          awsRegion = settings.awsRegion || config.get("awsRegion", "us-east-1");
+          await config.update(
+            "awsRegion",
+            awsRegion || "us-east-1",
+            vscode.ConfigurationTarget.Global
+          );
+        } else if (accessKeyInput && secretKeyInput) {
+          // Store AWS credentials securely
+          awsAccessKey = accessKeyInput;
+          awsSecretKey = secretKeyInput;
+          awsRegion = settings.awsRegion || "us-east-1";
+          await config.update(
+            "awsRegion",
+            awsRegion || "us-east-1",
+            vscode.ConfigurationTarget.Global
+          );
+          // Store AWS keys using helper method (with fallback)
+          await this.setSecret("bedrock_awsAccessKey", awsAccessKey);
+          await this.setSecret("bedrock_awsSecretKey", awsSecretKey);
+        } else {
+          // Partial credentials provided - keep existing values
+          vscode.window.showWarningMessage(
+            "Both AWS Access Key and Secret Access Key are required for Bedrock."
+          );
+          awsRegion = config.get("awsRegion", "us-east-1");
+          awsAccessKey = await this.getSecret("bedrock_awsAccessKey");
+          awsSecretKey = await this.getSecret("bedrock_awsSecretKey");
+        }
       } else {
-        // Load stored credentials if not provided
+        // Load stored credentials if not explicitly updating Bedrock credentials
         awsRegion = config.get("awsRegion", "us-east-1");
         awsAccessKey = await this.getSecret("bedrock_awsAccessKey");
         awsSecretKey = await this.getSecret("bedrock_awsSecretKey");
       }
+    }
+
+    // Bedrock requires AWS credentials; skip provider init when missing/cleared
+    if (settings.provider === "bedrock" && (!awsAccessKey || !awsSecretKey)) {
+      this.log(
+        "[Bedrock] Credentials missing or cleared, skipping provider initialization"
+      );
+      if (!isClearingBedrockCredentials) {
+        vscode.window.showInformationMessage(
+          "Bedrock selected, but AWS credentials are not configured yet."
+        );
+      }
+      return;
     }
 
     // Get existing API key if user didn't provide a new one
@@ -1818,6 +2076,7 @@ class ChatViewProvider {
     const baseURL = config.get("azureEndpoint", "");
     const useResponsesAPI = config.get("useResponsesAPI", false);
     const awsRegion = config.get("awsRegion", "us-east-1");
+    const mcpEnabled = await this.isMcpEnabled();
 
     let apiKey = "";
     let awsAccessKey = "";
@@ -1838,9 +2097,15 @@ class ChatViewProvider {
         model,
         baseURL,
         useResponsesAPI,
+        mcpEnabled,
         hasApiKey: !!apiKey,
         hasBedrockCredentials: !!(awsAccessKey && awsSecretKey),
       },
+    });
+
+    this._view?.webview.postMessage({
+      type: "mcpEnabledState",
+      enabled: mcpEnabled,
     });
 
     // Initialize provider based on type
@@ -2195,39 +2460,33 @@ class ChatViewProvider {
         appliedBlocks, // Include applied blocks
       });
 
-      // Send persisted context status if available (for context gauge)
-      if (conversation?.cumulativeTokens && !beforeIndex) {
-        // Restore token manager state with persisted tokens
-        this.tokenManager.setCumulativeTokens(conversation.cumulativeTokens);
+      // Restore/send context status on full conversation load.
+      // Always reset token manager so switching conversations doesn't leak prior state.
+      if (!beforeIndex) {
+        const persistedTokens = conversation?.cumulativeTokens || 0;
+        this.tokenManager.setCumulativeTokens(persistedTokens);
 
-        const maxTokens =
-          conversation.contextMaxTokens ||
-          this.tokenManager.getContextInfo(
-            this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
-              "openai",
-            this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o"
-          ).maxTokens;
-
-        const usedPercentage =
-          (conversation.cumulativeTokens / maxTokens) * 100;
+        const providerName =
+          this.llmConnector.getCurrentProvider()?.getName()?.toLowerCase() ||
+          "openai";
+        const modelName =
+          this.llmConnector.getCurrentProvider()?.defaultModel || "gpt-4o";
+        const restoredContextStatus = this.tokenManager.getContextStatus(
+          persistedTokens,
+          providerName,
+          modelName
+        );
 
         this._view.webview.postMessage({
           type: "contextStatus",
           contextStatus: {
-            usedPercentage,
-            currentTokens: conversation.cumulativeTokens,
-            maxTokens,
-            remainingTokens: maxTokens - conversation.cumulativeTokens,
-            status:
-              usedPercentage >= 85
-                ? "critical"
-                : usedPercentage >= 70
-                ? "warning"
-                : usedPercentage >= 50
-                ? "moderate"
-                : "normal",
-            needsSliding: usedPercentage >= 70,
-            needsSummarization: usedPercentage >= 75,
+            usedPercentage: restoredContextStatus.usedPercentage,
+            currentTokens: restoredContextStatus.currentTokens,
+            maxTokens: restoredContextStatus.maxTokens,
+            remainingTokens: restoredContextStatus.remainingTokens,
+            status: restoredContextStatus.status,
+            needsSliding: restoredContextStatus.needsSliding,
+            needsSummarization: restoredContextStatus.needsSummarization,
           },
         });
       }
@@ -2517,6 +2776,10 @@ class ChatViewProvider {
 
     // Handle messages from config panel
     this._configPanel.webview.onDidReceiveMessage(async (data) => {
+      if (this._handleUILogMessage(data, "ConfigPanel")) {
+        return;
+      }
+
       switch (data.type) {
         case "saveCustomModels":
           await this.saveCustomModels(data.models);
@@ -2554,6 +2817,203 @@ class ChatViewProvider {
     this._configPanel.onDidDispose(() => {
       this._configPanel = null;
     });
+  }
+
+  /**
+   * Open MCP configuration panel in editor area
+   */
+  openMcpPanel() {
+    const column = vscode.ViewColumn.One;
+
+    if (this._mcpPanel) {
+      this._mcpPanel.reveal(column);
+      this.handleLoadMcpConfig();
+      return;
+    }
+
+    this._mcpPanel = vscode.window.createWebviewPanel(
+      "tinkerMcpConfig",
+      "Tinker MCP Configuration",
+      column,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this._extensionUri, "webview-ui", "dist"),
+          vscode.Uri.joinPath(this._extensionUri, "media"),
+        ],
+      }
+    );
+
+    this._mcpPanel.iconPath = vscode.Uri.joinPath(
+      this._extensionUri,
+      "media",
+      "tinker-logo-v2.svg"
+    );
+
+    this._mcpPanel.webview.html = this._getMcpPanelHtml(this._mcpPanel.webview);
+
+    this._mcpPanel.webview.onDidReceiveMessage(async (data) => {
+      if (this._handleUILogMessage(data, "McpPanel")) {
+        return;
+      }
+
+      switch (data.type) {
+        case "loadMcpConfig":
+          await this.handleLoadMcpConfig();
+          break;
+        case "saveMcpConfig":
+          await this.handleSaveMcpConfig(data.payload || {});
+          break;
+        case "deleteMcpServer":
+          await this.handleDeleteMcpServer(data.serverId);
+          break;
+        case "testMcpServer":
+          await this.handleTestMcpServer(
+            data.server || {},
+            data.secretValues || {}
+          );
+          break;
+        case "refreshMcpTools":
+          await this.handleRefreshMcpTools(true);
+          break;
+        case "setMcpEnabled":
+          await this.setMcpEnabled(Boolean(data.enabled));
+          break;
+        case "closePanel":
+          this._mcpPanel?.dispose();
+          break;
+      }
+    });
+
+    this._mcpPanel.onDidDispose(() => {
+      this._mcpPanel = null;
+    });
+
+    this.handleLoadMcpConfig();
+  }
+
+  async handleLoadMcpConfig() {
+    if (!this.mcpConfigStore) return;
+
+    try {
+      const panelConfig = await this.mcpConfigStore.getPanelConfig();
+      this._mcpPanel?.webview.postMessage({
+        type: "mcpConfigLoaded",
+        config: panelConfig,
+      });
+      this._view?.webview.postMessage({
+        type: "mcpEnabledState",
+        enabled: panelConfig.enabled,
+      });
+      await this.handleRefreshMcpTools(false);
+    } catch (error) {
+      this.logger.error("Failed to load MCP config", error);
+      this._mcpPanel?.webview.postMessage({
+        type: "mcpConfigLoaded",
+        config: {
+          enabled: false,
+          servers: [],
+          error: error?.message || "Failed to load MCP configuration",
+        },
+      });
+    }
+  }
+
+  async handleSaveMcpConfig(payload = {}) {
+    if (!this.mcpConfigStore) return;
+
+    try {
+      const saved = await this.mcpConfigStore.saveConfig(payload);
+      await this.setMcpEnabled(saved.enabled);
+      if (this.mcpManager) {
+        await this.mcpManager.refreshToolDefinitions({ force: true });
+      }
+      await this.handleLoadMcpConfig();
+    } catch (error) {
+      this.logger.error("Failed to save MCP config", error);
+      vscode.window.showErrorMessage(
+        `Failed to save MCP config: ${error?.message || "Unknown error"}`
+      );
+    }
+  }
+
+  async handleDeleteMcpServer(serverId) {
+    if (!this.mcpConfigStore || !serverId) return;
+
+    try {
+      await this.mcpConfigStore.deleteServer(serverId);
+      if (this.mcpManager) {
+        await this.mcpManager.refreshToolDefinitions({ force: true });
+      }
+      await this.handleLoadMcpConfig();
+    } catch (error) {
+      this.logger.error("Failed to delete MCP server", error);
+      vscode.window.showErrorMessage(
+        `Failed to delete MCP server: ${error?.message || "Unknown error"}`
+      );
+    }
+  }
+
+  async handleTestMcpServer(server, secretValues = {}) {
+    if (!this.mcpConfigStore || !this.mcpManager) return;
+
+    try {
+      this.logger.info(
+        "[MCP] Testing server",
+        server?.alias || server?.id || "unknown"
+      );
+      const runtimeServer = await this.mcpConfigStore.resolveRuntimeServer(
+        server,
+        secretValues
+      );
+      const result = await this.mcpManager.testServer(runtimeServer);
+      if (result?.success) {
+        this.logger.info(
+          "[MCP] Test success",
+          result.serverAlias || result.serverId,
+          `tools=${result.toolCount || 0}`
+        );
+      } else {
+        this.logger.warn(
+          "[MCP] Test failed",
+          result?.serverAlias || result?.serverId,
+          result?.error || "Unknown error"
+        );
+      }
+      this._mcpPanel?.webview.postMessage({
+        type: "mcpServerTestResult",
+        result,
+      });
+    } catch (error) {
+      this.logger.error("[MCP] Test error", error);
+      this._mcpPanel?.webview.postMessage({
+        type: "mcpServerTestResult",
+        result: {
+          success: false,
+          serverId: server?.id,
+          serverAlias: server?.alias,
+          error: error?.message || "MCP test failed",
+        },
+      });
+    }
+  }
+
+  async handleRefreshMcpTools(force = false) {
+    if (!this.mcpManager) return;
+    try {
+      const toolsByServer = await this.mcpManager.getToolsByServer({ force });
+      this._mcpPanel?.webview.postMessage({
+        type: "mcpToolsLoaded",
+        toolsByServer,
+      });
+    } catch (error) {
+      this._mcpPanel?.webview.postMessage({
+        type: "mcpToolsLoaded",
+        toolsByServer: {},
+        error: error?.message || "Failed loading MCP tools",
+      });
+    }
   }
 
   /**
@@ -2659,6 +3119,33 @@ class ChatViewProvider {
   }
 
   /**
+   * Get HTML for MCP configuration panel webview
+   */
+  _getMcpPanelHtml(webview) {
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "webview-ui", "dist", "mcp-panel.js")
+    );
+
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "webview-ui", "dist", "output.css")
+    );
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tinker MCP Configuration</title>
+  <link rel="stylesheet" href="${styleUri}">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="${scriptUri}"></script>
+</body>
+</html>`;
+  }
+
+  /**
    * Open review panel as editor panel
    */
   openReviewPanel(pendingBlocks = [], appliedBlocks = []) {
@@ -2712,6 +3199,10 @@ class ChatViewProvider {
 
     // Handle messages from review panel
     this._reviewPanel.webview.onDidReceiveMessage(async (data) => {
+      if (this._handleUILogMessage(data, "ReviewPanel")) {
+        return;
+      }
+
       switch (data.type) {
         case "loadBlocks":
           // Panel requests blocks - send current state
@@ -2722,7 +3213,11 @@ class ChatViewProvider {
           });
           break;
         case "applyCodeBlock":
-          await this.applyCodeBlock(data.block);
+          const applyResult = await this.applyCodeBlock(data.block);
+          if (applyResult?.success && data.block) {
+            const contentField = data.block.type === "edit" ? "search" : "content";
+            await this.notifyBlockApplied(data.block, contentField);
+          }
           break;
         case "closePanel":
           this._reviewPanel?.dispose();
@@ -2842,6 +3337,10 @@ class ChatViewProvider {
     );
 
     this._usagePanel.webview.onDidReceiveMessage(async (data) => {
+      if (this._handleUILogMessage(data, "UsageDashboard")) {
+        return;
+      }
+
       if (data.type === "loadUsageData") {
         await this.handleLoadUsageData();
       }
@@ -3082,6 +3581,16 @@ class ChatViewProvider {
           workspaceContext: { openFiles: [], workspaceName: null },
         },
       });
+    }
+  }
+
+  async dispose() {
+    try {
+      if (this.mcpManager) {
+        await this.mcpManager.dispose();
+      }
+    } catch (error) {
+      this.logger.warn("Failed disposing MCP manager", error);
     }
   }
 }

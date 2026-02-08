@@ -2,7 +2,7 @@
   "name": "tinker",
   "displayName": "Tinker",
   "description": "Open-source Coding Agent - BYOK",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "author": "vatsalsaglani",
   "publisher": "vatsalsaglani",
   "icon": "media/tinker-logo-v2.png",
@@ -95,8 +95,19 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "tinker.showLogs",
+        "title": "Show Logs",
+        "category": "Tinker",
+        "icon": "$(output)"
+      },
+      {
         "command": "tinker.openConfigPanel",
         "title": "Tinker: Configure API Keys & Models",
+        "category": "Tinker"
+      },
+      {
+        "command": "tinker.openMcpPanel",
+        "title": "Tinker: Open MCP Configuration",
         "category": "Tinker"
       }
     ],
@@ -154,7 +165,8 @@
             "openai",
             "anthropic",
             "gemini",
-            "azure"
+            "azure",
+            "bedrock"
           ],
           "description": "LLM provider to use"
         },
@@ -177,6 +189,124 @@
           "type": "string",
           "default": "us-east-1",
           "description": "AWS region for Amazon Bedrock"
+        },
+        "tinkerAssistant.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "description": "Controls verbosity for Tinker Output channel logs"
+        },
+        "tinkerAssistant.revealLogsOnError": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically reveal the Tinker Output channel when an error is logged"
+        },
+        "tinkerAssistant.mcp.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Enable MCP tools for this workspace"
+        },
+        "tinkerAssistant.mcp.servers": {
+          "type": "array",
+          "default": [],
+          "scope": "resource",
+          "description": "MCP server definitions for this workspace",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "alias": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "http"
+                ]
+              },
+              "command": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "allowWriteTools": {
+                "type": "boolean"
+              },
+              "writableToolAllowlist": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timeoutMs": {
+                "type": "number"
+              },
+              "envSecretRefs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "secretKey": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "secretKey"
+                  ]
+                }
+              },
+              "headerSecretRefs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "secretKey": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "secretKey"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "alias",
+              "enabled",
+              "transport"
+            ]
+          }
         },
         "tinkerAssistant.customModels": {
           "type": "object",
@@ -270,6 +400,7 @@
     "@anthropic-ai/bedrock-sdk": "^0.26.0",
     "@anthropic-ai/sdk": "^0.65.0",
     "@google/generative-ai": "^0.24.1",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@tailwindcss/typography": "^0.5.19",
     "clsx": "^2.1.1",
     "highlight.js": "^11.11.1",

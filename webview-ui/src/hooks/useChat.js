@@ -16,6 +16,7 @@ export function useChat() {
 
   // Use ref to track ordered parts (text chunks and tool calls in order)
   const partsRef = useRef([]);
+  const generationStoppedRef = useRef(false);
 
   /**
    * Format persisted messages for UI display
@@ -53,6 +54,7 @@ export function useChat() {
   const vscode = useVSCodeMessage((message) => {
     switch (message.type) {
       case "userMessage":
+        generationStoppedRef.current = false;
         setMessages((prev) => [
           ...prev,
           {
@@ -70,6 +72,9 @@ export function useChat() {
         break;
 
       case "assistantChunk":
+        if (generationStoppedRef.current) {
+          break;
+        }
         // Add to ordered parts - extend last text part or create new one
         const lastPart = partsRef.current[partsRef.current.length - 1];
         if (lastPart?.type === "text") {
@@ -128,6 +133,9 @@ export function useChat() {
         break;
 
       case "toolCall":
+        if (generationStoppedRef.current) {
+          break;
+        }
         // Add tool call to current ref (will be included in assistant message)
         const newToolCall = {
           id: message.tool.id,
@@ -153,6 +161,9 @@ export function useChat() {
         break;
 
       case "toolResult":
+        if (generationStoppedRef.current) {
+          break;
+        }
         // Update current tool call with result
         currentToolCallsRef.current = currentToolCallsRef.current.map((tc) =>
           tc.id === message.tool.id
@@ -169,6 +180,9 @@ export function useChat() {
         break;
 
       case "usageUpdate":
+        if (generationStoppedRef.current) {
+          break;
+        }
         // Live usage update during streaming - update both message and context
         setCurrentAssistantMessage((prev) => ({
           ...prev,
@@ -194,11 +208,9 @@ export function useChat() {
         break;
 
       case "generationStopped":
+        generationStoppedRef.current = true;
         setIsGenerating(false);
         setIsThinking(false);
-        setCurrentAssistantMessage(null);
-        currentToolCallsRef.current = [];
-        partsRef.current = [];
         break;
 
       case "messagesLoaded":
@@ -209,6 +221,14 @@ export function useChat() {
         } else {
           // Replace all messages (conversation switch)
           setMessages(formatMessages(message.messages));
+          // Reset until restored status arrives from backend.
+          setContextStatus(null);
+        }
+        break;
+
+      case "contextStatus":
+        if (message.contextStatus) {
+          setContextStatus(message.contextStatus);
         }
         break;
 
@@ -217,14 +237,18 @@ export function useChat() {
         setCurrentAssistantMessage(null);
         currentToolCallsRef.current = [];
         partsRef.current = [];
+        setContextStatus(null);
         break;
     }
   });
 
   const sendMessage = useCallback(
     (text, contextChips = [], images = []) => {
+      generationStoppedRef.current = false;
       setIsGenerating(true);
+      setCurrentAssistantMessage(null);
       currentToolCallsRef.current = [];
+      partsRef.current = [];
       vscode.postMessage({
         type: "sendMessage",
         text,
@@ -236,6 +260,7 @@ export function useChat() {
   );
 
   const stopGeneration = useCallback(() => {
+    generationStoppedRef.current = true;
     vscode.postMessage({ type: "stopGeneration" });
   }, [vscode]);
 

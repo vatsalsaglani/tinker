@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import TinkerIcon from "./TinkerIcon";
 import { fixMessageContent } from "../utils/markdownFixer";
+import { createUILogger } from "../utils/ui-logger";
+
+const uiLogger = createUILogger("ChatMessage");
 
 const thinkingPhrases = [
   { text: "Analyzing...", icon: Search },
@@ -274,7 +277,7 @@ function ChatMessage({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy:", err);
+      uiLogger.error("Failed to copy", err);
     }
   };
   const parseContent = (content) => {
@@ -648,7 +651,7 @@ function ChatMessage({
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
         } catch (err) {
-          console.error("Failed to copy:", err);
+          uiLogger.error("Failed to copy", err);
         }
       };
 

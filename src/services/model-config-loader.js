@@ -6,6 +6,9 @@
 const fs = require("fs");
 const path = require("path");
 const yaml = require("js-yaml");
+const { getLogger } = require("./logger");
+
+const logger = getLogger().child("ModelConfigLoader");
 
 class ModelConfigLoader {
   constructor(configPath = null) {
@@ -33,7 +36,7 @@ class ModelConfigLoader {
 
     try {
       if (!fs.existsSync(this.configPath)) {
-        console.warn(
+        logger.warn(
           `[ModelConfigLoader] Config file not found: ${this.configPath}`
         );
         return null;
@@ -41,14 +44,14 @@ class ModelConfigLoader {
 
       const fileContents = fs.readFileSync(this.configPath, "utf8");
       this._config = yaml.load(fileContents);
-      console.log(
+      logger.info(
         `[ModelConfigLoader] Loaded config with ${
           Object.keys(this._config.providers || {}).length
         } providers`
       );
       return this._config;
     } catch (error) {
-      console.error(
+      logger.error(
         `[ModelConfigLoader] Failed to load config:`,
         error.message
       );

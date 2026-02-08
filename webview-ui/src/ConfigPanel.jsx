@@ -21,10 +21,16 @@ import {
 import ModelManager from "./components/ModelManager";
 import BedrockModelManager from "./components/BedrockModelManager";
 import Switch from "./components/Switch";
+import { createUILogger, installGlobalErrorHandlers } from "./utils/ui-logger";
 
 // Acquire VS Code API once at module level (singleton)
 const vscode =
   typeof acquireVsCodeApi !== "undefined" ? acquireVsCodeApi() : null;
+if (typeof window !== "undefined" && vscode) {
+  window.__tinkerVsCodeApi = vscode;
+}
+const uiLogger = createUILogger("ConfigPanel");
+installGlobalErrorHandlers(uiLogger);
 
 const providers = [
   { value: "openai", label: "OpenAI", icon: OpenAIIcon },
@@ -413,7 +419,7 @@ function ConfigPanel() {
                           provider: "bedrock",
                           awsAccessKey: "",
                           awsSecretKey: "",
-                          awsRegion: "us-east-1",
+                          awsRegion: bedrockConfig.awsRegion || "us-east-1",
                         },
                       });
                       setKeyStatus((prev) => ({ ...prev, bedrock: false }));

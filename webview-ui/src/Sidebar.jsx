@@ -31,6 +31,10 @@ import {
   BedrockIcon,
 } from "./icons";
 import Switch from "./components/Switch";
+import { createUILogger, installGlobalErrorHandlers } from "./utils/ui-logger";
+
+const uiLogger = createUILogger("Sidebar");
+installGlobalErrorHandlers(uiLogger);
 
 function Sidebar() {
   const [showSettings, setShowSettings] = useState(false);
@@ -38,6 +42,7 @@ function Sidebar() {
   const [selectedProvider, setSelectedProvider] = useState("openai");
   const [selectedModel, setSelectedModel] = useState("");
   const [useResponsesAPI, setUseResponsesAPI] = useState(false);
+  const [mcpEnabled, setMcpEnabled] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
@@ -108,9 +113,12 @@ function Sidebar() {
       if (msg.role === "assistant" && msg.codeBlocks) {
         msg.codeBlocks.forEach((block) => {
           // Generate a unique key for each block
-          const contentHash = block.content
-            ? block.content.substring(0, 50)
-            : block.replace?.substring(0, 50) || "";
+          const contentHash = (
+            block.search ||
+            block.content ||
+            block.replace ||
+            ""
+          ).substring(0, 50);
           blocks.push({
             ...block,
             contentHash,
@@ -149,6 +157,9 @@ function Sidebar() {
       setSelectedProvider(message.settings.provider || "openai");
       setSelectedModel(message.settings.model || "");
       setUseResponsesAPI(message.settings.useResponsesAPI || false);
+      setMcpEnabled(Boolean(message.settings.mcpEnabled));
+    } else if (message.type === "mcpEnabledState") {
+      setMcpEnabled(Boolean(message.enabled));
     } else if (message.type === "customModelsLoaded") {
       setCustomModels(message.models || {});
     } else if (message.type === "bedrockModelsLoaded") {
@@ -228,6 +239,14 @@ function Sidebar() {
         model: selectedModel,
         useResponsesAPI: value,
       },
+    });
+  };
+
+  const updateMcpEnabled = (value) => {
+    setMcpEnabled(value);
+    vscode.postMessage({
+      type: "setMcpEnabled",
+      enabled: value,
     });
   };
 
@@ -764,6 +783,12 @@ function Sidebar() {
                     />
                   </div>
                 )}
+
+                {/* MCP Toggle */}
+                <div className="flex items-center gap-1.5 bg-white/5 rounded-lg px-2 py-1">
+                  <span className="text-[10px] text-white/50">MCP</span>
+                  <Switch checked={mcpEnabled} onChange={updateMcpEnabled} size="sm" />
+                </div>
               </div>
 
               {/* Right side - Send button */}

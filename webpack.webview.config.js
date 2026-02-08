@@ -7,6 +7,7 @@ module.exports = {
     sidebar: "./webview-ui/src/Sidebar.jsx",
     editor: "./webview-ui/src/Editor.jsx",
     "config-panel": "./webview-ui/src/ConfigPanel.jsx",
+    "mcp-panel": "./webview-ui/src/McpPanel.jsx",
     "usage-dashboard": "./webview-ui/src/UsageDashboard.jsx",
     "review-panel": "./webview-ui/src/ReviewPanel.jsx",
   },

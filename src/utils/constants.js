@@ -3,8 +3,8 @@
  * Central place to control debug logging across the extension
  */
 
-// Set to true to enable debug file logging for providers
-const DEBUG_LOGGING_ENABLED = true;
+// Keep disabled by default for production; enable only for local debugging.
+const DEBUG_LOGGING_ENABLED = false;
 
 // Debug log directory (relative to home directory)
 const DEBUG_LOG_DIR = ".tinker-debug";

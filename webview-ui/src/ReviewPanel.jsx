@@ -15,10 +15,16 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import hljs from "highlight.js";
+import { createUILogger, installGlobalErrorHandlers } from "./utils/ui-logger";
 
 // Acquire VS Code API once at module level (singleton)
 const vscode =
   typeof acquireVsCodeApi !== "undefined" ? acquireVsCodeApi() : null;
+if (typeof window !== "undefined" && vscode) {
+  window.__tinkerVsCodeApi = vscode;
+}
+const uiLogger = createUILogger("ReviewPanel");
+installGlobalErrorHandlers(uiLogger);
 
 const extensionToLanguage = {
   js: "javascript",
@@ -347,6 +353,7 @@ function ReviewPanel() {
     ...block,
     key: `${block.filePath}:${idx}`,
     blockKey: `${block.filePath}:${block.type}:${
+      getContent(block.search)?.substring(0, 50) ||
       getContent(block.content)?.substring(0, 50) ||
       getContent(block.replace)?.substring(0, 50) ||
       ""

@@ -59,8 +59,14 @@ const ReviewBar = ({
 
   // Filter out already applied blocks
   const unappliedBlocks = pendingBlocks.filter((block) => {
+    const derivedContentHash = (
+      block.search ||
+      block.content ||
+      block.replace ||
+      ""
+    ).substring(0, 50);
     const blockKey = `${block.filePath}:${block.type}:${
-      block.contentHash || ""
+      block.contentHash || derivedContentHash
     }`;
     return !appliedBlocks.has(blockKey);
   });

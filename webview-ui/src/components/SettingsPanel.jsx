@@ -8,6 +8,7 @@ import {
   ExternalLink,
   BarChart2,
   ChevronRight,
+  PlugZap,
 } from "lucide-react";
 import { useVSCodeMessage } from "../hooks/useVSCodeMessage";
 import {
@@ -69,6 +70,11 @@ function SettingsPanel({ onClose }) {
     onClose();
   };
 
+  const handleOpenMcpPanel = () => {
+    vscode.postMessage({ type: "openMcpPanel" });
+    onClose();
+  };
+
   const handleSave = () => {
     setIsSaving(true);
 
@@ -120,6 +126,38 @@ function SettingsPanel({ onClose }) {
             aria-label="Close"
           >
             <X size={16} />
+          </button>
+
+          {/* MCP Config Button */}
+          <button
+            onClick={handleOpenMcpPanel}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border transition-all group"
+            style={{
+              borderColor: "var(--vscode-panel-border)",
+              backgroundColor: "var(--vscode-input-background)",
+            }}
+          >
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <PlugZap size={18} className="text-blue-400" />
+            </div>
+            <div className="flex-1 text-left">
+              <div
+                className="text-sm font-medium"
+                style={{ color: "var(--vscode-foreground)" }}
+              >
+                MCP Configuration
+              </div>
+              <div
+                className="text-xs"
+                style={{ color: "var(--vscode-descriptionForeground)" }}
+              >
+                Configure MCP servers and enable external tool integration
+              </div>
+            </div>
+            <ChevronRight
+              size={14}
+              style={{ color: "var(--vscode-descriptionForeground)" }}
+            />
           </button>
         </div>
 

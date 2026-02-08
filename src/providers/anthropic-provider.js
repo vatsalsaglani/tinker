@@ -3,6 +3,9 @@ const Anthropic = require("@anthropic-ai/sdk");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { getLogger } = require("../services/logger");
+
+const logger = getLogger().child("AnthropicProvider");
 
 class AnthropicProvider extends BaseProvider {
   constructor(config) {
@@ -46,9 +49,9 @@ class AnthropicProvider extends BaseProvider {
       const filepath = path.join(this.debugDir, filename);
 
       fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf8");
-      console.log(`[Anthropic DEBUG] Wrote log to: ${filepath}`);
+      logger.debug(`[Anthropic DEBUG] Wrote log to: ${filepath}`);
     } catch (error) {
-      console.error(
+      logger.error(
         "[Anthropic DEBUG] Failed to write log file:",
         error.message
       );
@@ -163,7 +166,7 @@ class AnthropicProvider extends BaseProvider {
         ? response.content[0].text
         : "";
     } catch (error) {
-      console.error("Anthropic API Error:", error);
+      logger.error("Anthropic API Error:", error);
       throw new Error(`Anthropic Error: ${error.message}`);
     }
   }
@@ -196,7 +199,7 @@ class AnthropicProvider extends BaseProvider {
           description: t.function.description,
           input_schema: t.function.parameters,
         }));
-        console.log(`[Anthropic] Adding ${tools.length} tools`);
+        logger.debug(`[Anthropic] Adding ${tools.length} tools`);
       }
 
       this.writeDebugLog("stream_request", {
@@ -274,11 +277,11 @@ class AnthropicProvider extends BaseProvider {
           try {
             const input = JSON.parse(currentToolUse.input);
             if (onToolCall) {
-              console.log(`[Anthropic] Executing tool: ${currentToolUse.name}`);
+              logger.debug(`[Anthropic] Executing tool: ${currentToolUse.name}`);
               await onToolCall(currentToolUse.name, input, currentToolUse.id);
             }
           } catch (e) {
-            console.error("[Anthropic] Failed to parse tool input:", e);
+            logger.error("[Anthropic] Failed to parse tool input:", e);
           }
           currentToolUse = null;
         }
@@ -305,7 +308,7 @@ class AnthropicProvider extends BaseProvider {
         usage,
       };
     } catch (error) {
-      console.error("Anthropic Streaming Error:", error);
+      logger.error("Anthropic Streaming Error:", error);
       this.writeDebugLog("stream_error", {
         error: error.message,
         timestamp: new Date().toISOString(),

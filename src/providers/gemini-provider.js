@@ -3,6 +3,9 @@ const OpenAI = require("openai");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { getLogger } = require("../services/logger");
+
+const logger = getLogger().child("GeminiProvider");
 
 /**
  * Gemini Provider using OpenAI SDK compatibility layer
@@ -47,7 +50,7 @@ class GeminiProvider extends BaseProvider {
     } = options;
 
     try {
-      console.log(`[Gemini] Chat - Model: ${model}`);
+      logger.debug(`[Gemini] Chat - Model: ${model}`);
 
       const response = await this.client.chat.completions.create({
         model,
@@ -58,7 +61,7 @@ class GeminiProvider extends BaseProvider {
 
       return response.choices[0].message.content;
     } catch (error) {
-      console.error("[Gemini] API Error:", error);
+      logger.error("[Gemini] API Error:", error);
       throw new Error(`Gemini Error: ${error.message}`);
     }
   }
@@ -72,7 +75,7 @@ class GeminiProvider extends BaseProvider {
       onToolCall = null,
     } = options;
 
-    console.log(
+    logger.debug(
       `[Gemini] StreamChat - Model: ${model}, Tools: ${tools?.length || 0}`
     );
 
@@ -88,11 +91,11 @@ class GeminiProvider extends BaseProvider {
     if (tools && tools.length > 0) {
       args.tools = tools;
       args.tool_choice = "auto";
-      console.log(`[Gemini] Adding ${tools.length} tools`);
+      logger.debug(`[Gemini] Adding ${tools.length} tools`);
     }
 
     try {
-      console.log(
+      logger.debug(
         `[Gemini] Creating stream with args:`,
         JSON.stringify({
           model: args.model,
@@ -115,7 +118,7 @@ class GeminiProvider extends BaseProvider {
 
         // Log first few chunks and every 10th chunk for debugging
         if (chunkCount <= 3 || chunkCount % 10 === 0) {
-          console.log(
+          logger.debug(
             `[Gemini] Chunk ${chunkCount}:`,
             JSON.stringify({
               hasChoices: !!chunk.choices?.length,
@@ -130,7 +133,7 @@ class GeminiProvider extends BaseProvider {
         // Capture usage from final chunk
         if (chunk.usage) {
           usage = chunk.usage;
-          console.log(`[Gemini] Usage received:`, JSON.stringify(chunk.usage));
+          logger.debug(`[Gemini] Usage received:`, JSON.stringify(chunk.usage));
         }
 
         const delta = chunk.choices[0]?.delta;
@@ -138,7 +141,7 @@ class GeminiProvider extends BaseProvider {
 
         if (chunkFinishReason) {
           finishReason = chunkFinishReason;
-          console.log(`[Gemini] Finish reason: ${finishReason}`);
+          logger.debug(`[Gemini] Finish reason: ${finishReason}`);
         }
 
         // Handle text content
@@ -161,7 +164,7 @@ class GeminiProvider extends BaseProvider {
                     currentToolCall.id
                   );
                 } catch (e) {
-                  console.error("[Gemini] Failed to parse tool arguments:", e);
+                  logger.error("[Gemini] Failed to parse tool arguments:", e);
                 }
               }
               currentToolCall = {
@@ -172,7 +175,7 @@ class GeminiProvider extends BaseProvider {
                   arguments: toolCall.function?.arguments || "",
                 },
               };
-              console.log(
+              logger.debug(
                 `[Gemini] Tool call started: ${currentToolCall.function.name}`
               );
             } else {
@@ -189,7 +192,7 @@ class GeminiProvider extends BaseProvider {
         if (chunkFinishReason && currentToolCall && onToolCall) {
           try {
             const args = JSON.parse(currentToolCall.function.arguments || "{}");
-            console.log(
+            logger.debug(
               `[Gemini] Executing tool (finish: ${chunkFinishReason}): ${currentToolCall.function.name}`
             );
             await onToolCall(
@@ -200,8 +203,8 @@ class GeminiProvider extends BaseProvider {
             // Mark that we executed a tool so we can continue the loop
             finishReason = "tool_calls";
           } catch (e) {
-            console.error("[Gemini] Failed to parse tool arguments:", e);
-            console.error(
+            logger.error("[Gemini] Failed to parse tool arguments:", e);
+            logger.error(
               "[Gemini] Raw arguments:",
               currentToolCall.function.arguments
             );
@@ -210,7 +213,7 @@ class GeminiProvider extends BaseProvider {
         }
       }
 
-      console.log(
+      logger.debug(
         `[Gemini] Stream complete - chunks: ${chunkCount}, responseLength: ${fullResponse.length}, finishReason: ${finishReason}`
       );
 
@@ -227,13 +230,13 @@ class GeminiProvider extends BaseProvider {
           try {
             const parsed = JSON.parse(trimmedResponse);
             if (parsed.reason && Object.keys(parsed).length <= 3) {
-              console.warn(
+              logger.warn(
                 `[Gemini] WARNING: Model returned what looks like tool call arguments as text content.`
               );
-              console.warn(
+              logger.warn(
                 `[Gemini] This is a known issue with some Gemini preview models.`
               );
-              console.warn(
+              logger.warn(
                 `[Gemini] Response: ${trimmedResponse.substring(0, 200)}`
               );
               // Don't fail - just log the warning. The model may need to be retried or the conversation continued.
@@ -250,10 +253,10 @@ class GeminiProvider extends BaseProvider {
         !currentToolCall &&
         finishReason === "stop"
       ) {
-        console.warn(
+        logger.warn(
           `[Gemini] WARNING: Empty response received! Model may not support streaming or there was an issue.`
         );
-        console.warn(
+        logger.warn(
           `[Gemini] Try checking if the model "${model}" is correct and supports the OpenAI compatibility layer.`
         );
       }
@@ -268,8 +271,8 @@ class GeminiProvider extends BaseProvider {
         usage,
       };
     } catch (error) {
-      console.error("[Gemini] Streaming Error:", error);
-      console.error("[Gemini] Error details:", {
+      logger.error("[Gemini] Streaming Error:", error);
+      logger.error("[Gemini] Error details:", {
         message: error.message,
         status: error.status,
         code: error.code,
@@ -288,7 +291,7 @@ class GeminiProvider extends BaseProvider {
       });
       return true;
     } catch (error) {
-      console.error("[Gemini] API Validation Error:", error.message);
+      logger.error("[Gemini] API Validation Error:", error.message);
       return false;
     }
   }
